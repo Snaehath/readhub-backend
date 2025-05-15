@@ -36,7 +36,7 @@ router.post("/chat", async (req, res) => {
       );
       const data = await response.json();
 
-      const books = data.docs.slice(0, 2).map((book) => ({
+      const books = data.docs.slice(0, 3).map((book) => ({
         title: book.title,
         author: book.author_name
           ? book.author_name.join(", ")
@@ -71,7 +71,7 @@ router.post("/chat", async (req, res) => {
         const articles = await collection
           .find({ category })
           .sort({ publishedAt: -1 })
-          .limit(2);
+          .limit(5);
         if (articles.length > 0) {
           categorizedNews[category] = articles;
         }

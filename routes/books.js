@@ -1,27 +1,7 @@
 const express = require("express");
-const { GoogleGenAI } = require("@google/genai");
 const axios = require("axios");
 const Books = require("../models/books")
 const router = express.Router();
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-// Route: GET /ai
-// router.get("/", async (req, res) => {
-//   try {
-//     const response = await ai.models.generateContent({
-//       model: "gemini-2.0-flash",
-//       contents: "Zelensky and Trump meet inside St Peter's Basilica before Pope's funeral this is a news headline explain what happened",
-//     });
-
-//     const text = response.text;
-
-//     res.json({ message: text });
-//   } catch (error) {
-//     console.error("Error generating AI content:", error);
-//     res.status(500).json({ error: "Something went wrong with AI generation" });
-//   }
-// });
 
 router.get("/fetch/books", async (req, res) => {
   try {

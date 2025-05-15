@@ -11,9 +11,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const mongodbURI = process.env.MONGO_URI
 
 mongoose
-  .connect("mongodb+srv://root:abc123ABC123@cluster0.qo5wjbl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+  .connect(mongodbURI)
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err));
 

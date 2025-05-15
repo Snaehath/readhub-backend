@@ -45,9 +45,9 @@ router.get("/fetch/in", async (req, res) => {
     const response = await axios.get(
       `https://gnews.io/api/v4/top-headlines?lang=en&category=general&max=10&apikey=${process.env.GNEWS_API_KEY}`
     );
-    
+
     const articles = response.data.articles.filter((a) => a.description);
-    
+
     const savedArticles = await Promise.all(
       articles.map(async (article) => {
         const existing = await NewsIn.findOne({ title: article.title });
@@ -57,7 +57,7 @@ router.get("/fetch/in", async (req, res) => {
             description: article.description,
             content: article.content,
             url: article.url,
-            image: article.image,
+            urlToImage: article.image,
             publishedAt: article.publishedAt,
             source: article.source,
           });
@@ -66,7 +66,7 @@ router.get("/fetch/in", async (req, res) => {
         return null;
       })
     );
-    
+
     res.status(200).json({ message: "Fetched and saved news." });
   } catch (err) {
     console.error("Error fetching news:", err.message);
@@ -86,115 +86,42 @@ router.get("/fetch-categories/us", async (req, res) => {
       "entertainment",
       "politics",
     ];
-    
+
     if (categories.length === 0) {
       return res
-      .status(400)
-      .json({ error: "At least one category is required" });
+        .status(400)
+        .json({ error: "At least one category is required" });
     }
-    
+
     // Fetch all categories in parallel
     const fetchPromises = categories.map((category) =>
       axios
-    .get(
-      `https://newsapi.org/v2/top-headlines?category=${category}&pageSize=10&apiKey=${process.env.NEWS_API_KEY}`
-    )
-    .then((response) => ({
-      category,
-      articles: response.data.articles.filter((a) => a.description && a.urlToImage),
-    }))
-  );
-  
-  const allFetchedData = await Promise.all(fetchPromises);
-  
-  let allSavedArticles = [];
-  
-  for (const { category, articles } of allFetchedData) {
-    const savedArticles = await Promise.all(
-      articles.map(async (article) => {
-        const updated = await News.findOneAndUpdate(
-          { title: article.title },
-          {
-            $setOnInsert: {
-              title: article.title,
-              description: article.description,
-              url: article.url,
-              urlToImage: article.urlToImage,
-              publishedAt: article.publishedAt,
-              source: article.source,
-            },
-            $addToSet: {
-              category: category,
-            },
-          },
-          { upsert: true, new: true }
-        );
-        return updated;
-      })
+        .get(
+          `https://newsapi.org/v2/top-headlines?category=${category}&pageSize=10&apiKey=${process.env.NEWS_API_KEY}`
+        )
+        .then((response) => ({
+          category,
+          articles: response.data.articles.filter(
+            (a) => a.description && a.urlToImage
+          ),
+        }))
     );
-    
-    allSavedArticles = allSavedArticles.concat(savedArticles);
-  }
-  
-  res
-  .status(200)
-  .json({
-    message: `Fetched and saved articles for categories: ${categories.join(
-      ", "
-    )}`,
-  });
-} catch (err) {
-  console.error("Error fetching multiple categories:", err.message);
-  res.status(500).json({ error: "Failed to fetch multiple categories" });
-}
-});
-// Fetch multiple categories and save in DB
-router.get("/fetch-categories/in", async (req, res) => {
-  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  try {
-    const categories = [
-      "technology",
-      "science",
-      "health",
-      "sports",
-      "business",
-      "entertainment",
-      "politics"
-    ];
-
-    if (categories.length === 0) {
-      return res.status(400).json({ error: "At least one category is required" });
-    }
-
-    let allFetchedData = [];
-
-    for (const category of categories) {
-      const response = await axios.get(
-        `https://gnews.io/api/v4/top-headlines?country=in&lang=en&category=${category}&max=10&apikey=${process.env.GNEWS_API_KEY}`
-      );
-
-      const articles = response.data.articles.filter((a) => a.description);
-
-      allFetchedData.push({ category, articles });
-
-      await delay(1500); //wait 1.5 seconds before next request 
-    }
+    const allFetchedData = await Promise.all(fetchPromises);
 
     let allSavedArticles = [];
 
     for (const { category, articles } of allFetchedData) {
       const savedArticles = await Promise.all(
         articles.map(async (article) => {
-          const updated = await NewsIn.findOneAndUpdate(
+          const updated = await News.findOneAndUpdate(
             { title: article.title },
             {
               $setOnInsert: {
                 title: article.title,
                 description: article.description,
-                content: article.content,
                 url: article.url,
-                image: article.image,
+                urlToImage: article.urlToImage,
                 publishedAt: article.publishedAt,
                 source: article.source,
               },
@@ -212,9 +139,85 @@ router.get("/fetch-categories/in", async (req, res) => {
     }
 
     res.status(200).json({
-      message: `Fetched and saved articles for categories: ${categories.join(", ")}`,
+      message: `Fetched and saved articles for categories: ${categories.join(
+        ", "
+      )}`,
     });
+  } catch (err) {
+    console.error("Error fetching multiple categories:", err.message);
+    res.status(500).json({ error: "Failed to fetch multiple categories" });
+  }
+});
+// Fetch multiple categories and save in DB
+router.get("/fetch-categories/in", async (req, res) => {
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  try {
+    const categories = [
+      "technology",
+      "science",
+      "health",
+      "sports",
+      "business",
+      "entertainment",
+      "politics",
+    ];
+
+    if (categories.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "At least one category is required" });
+    }
+
+    let allFetchedData = [];
+
+    for (const category of categories) {
+      const response = await axios.get(
+        `https://gnews.io/api/v4/top-headlines?country=in&lang=en&category=${category}&max=10&apikey=${process.env.GNEWS_API_KEY}`
+      );
+
+      const articles = response.data.articles.filter((a) => a.description);
+
+      allFetchedData.push({ category, articles });
+
+      await delay(1500); //wait 1.5 seconds before next request
+    }
+
+    let allSavedArticles = [];
+
+    for (const { category, articles } of allFetchedData) {
+      const savedArticles = await Promise.all(
+        articles.map(async (article) => {
+          const updated = await NewsIn.findOneAndUpdate(
+            { title: article.title },
+            {
+              $setOnInsert: {
+                title: article.title,
+                description: article.description,
+                content: article.content,
+                url: article.url,
+                urlToImage: article.image,
+                publishedAt: article.publishedAt,
+                source: article.source,
+              },
+              $addToSet: {
+                category: category,
+              },
+            },
+            { upsert: true, new: true }
+          );
+          return updated;
+        })
+      );
+
+      allSavedArticles = allSavedArticles.concat(savedArticles);
+    }
+
+    res.status(200).json({
+      message: `Fetched and saved articles for categories: ${categories.join(
+        ", "
+      )}`,
+    });
   } catch (err) {
     console.error("Error fetching multiple categories:", err.message);
     res.status(500).json({ error: "Failed to fetch multiple categories" });
