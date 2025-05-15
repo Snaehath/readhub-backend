@@ -3,7 +3,6 @@ const router = express.Router();
 const { chatWithGemini } = require("../models/geminiClient");
 const NewsUs = require("../models/news");
 const NewsIndia = require("../models/newsIn");
-const fetch = require("node-fetch");
 
 const categories = [
   "technology",
