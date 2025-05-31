@@ -3,6 +3,7 @@ const router = express.Router();
 const { chatWithGemini } = require("../models/geminiClient");
 const NewsUs = require("../models/news");
 const NewsIndia = require("../models/newsIn");
+const { Types } = require("mongoose");
 
 const categories = [
   "technology",
@@ -14,134 +15,208 @@ const categories = [
   "politics",
 ];
 
+// --- Detect intent from message ---
+function detectIntent(message) {
+  const lower = message.toLowerCase();
+  return {
+    isIndia: lower.includes("india"),
+    isBook: /recommend|book/.test(lower),
+    isSummary: /summarize|magazine/.test(lower),
+    matchedCategory: categories.find((cat) => lower.includes(cat)),
+    isNews: lower.includes("news"),
+  };
+}
+
+// --- Book Recommendation ---
+async function handleBookRecommendation(userMessage) {
+  const searchTerm = encodeURIComponent(
+    userMessage.replace(/recommend( me)? (a )?book( on)?/i, "").trim()
+  );
+
+  const response = await fetch(
+    `https://openlibrary.org/search.json?q=${searchTerm}&lang=en&limit=2`
+  );
+  const data = await response.json();
+
+  const books = data.docs.slice(0, 3).map((book) => ({
+    title: book.title,
+    author: book.author_name?.join(", ") || "Unknown Author",
+    link: book.key ? `https://openlibrary.org${book.key}` : null,
+    cover: book.cover_edition_key
+      ? `https://covers.openlibrary.org/b/olid/${book.cover_edition_key}-M.jpg`
+      : `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`,
+  }));
+
+  let reply = `Here are some books I found:\n\n`;
+  books.forEach((book) => {
+    reply += `### 📘 [${book.title}](${book.link})\n`;
+    reply += `**Author:** ${book.author}\n`;
+    if (book.cover) reply += `![Cover Image](${book.cover})\n`;
+    reply += `\n`;
+  });
+
+  return reply;
+}
+
+// --- Magazine Summary ---
+async function handleMagazineSummary(collection) {
+  const categorizedNews = {};
+
+  for (let category of categories) {
+    const articles = await collection
+      .find({ category })
+      .sort({ publishedAt: -1 })
+      .limit(5);
+    if (articles.length > 0) categorizedNews[category] = articles;
+  }
+
+  let newsDigest = "";
+  for (let cat in categorizedNews) {
+    newsDigest += `## ${cat.toUpperCase()}\n`;
+    categorizedNews[cat].forEach((item) => {
+      newsDigest += `- **${item.title}**: ${item.description}\n`;
+    });
+    newsDigest += `\n`;
+  }
+
+  const prompt = `
+You are ReadHub Assistant, a smart and friendly virtual news editor.
+
+Turn the following categorized list of news into a polished digital magazine:
+${newsDigest}
+
+Use a professional, friendly tone. Include clear headlines and brief summaries.
+  `;
+
+  return await chatWithGemini(prompt);
+}
+
+// --- General News or Category-based News ---
+async function handleGeneralNews({ category, collection, userMessage }) {
+  let newsData = [];
+
+  if (category) {
+    newsData = await collection
+      .find({ category })
+      .sort({ publishedAt: -1 })
+      .limit(5);
+  } else {
+    newsData = await collection.find().sort({ publishedAt: -1 }).limit(5);
+  }
+
+  const context = newsData
+    .map((n) => `- ${n.title}: ${n.description}`)
+    .join("\n");
+
+  const prompt = `
+You are ReadHub Assistant, an intelligent virtual news companion.
+
+User asked: "${userMessage}"
+
+Here are the latest news articles:
+${context}
+
+Please craft a friendly, helpful response. Suggest follow-up categories if relevant.
+  `;
+
+  let reply = await chatWithGemini(prompt);
+
+  if (!category && userMessage.toLowerCase().includes("news")) {
+    reply += `\n\nWould you like to hear more news in *sports*, *technology*, or *science*?`;
+  }
+
+  return reply;
+}
+
+// --- Ask AI - Explaining the Particular News ---
+const handleAskAi = async ({ id, country }) => {
+  let article;
+  const objectId = Types.ObjectId.createFromHexString(id);
+
+  if (country === "us") {
+    article = await NewsUs.findOne({ _id: objectId });
+  } else if (country === "in") {
+    article = await NewsIndia.findOne({ _id: objectId });
+  }
+
+  if (!article) {
+    return "Sorry, I couldn't find the news article you're referring to.";
+  }
+
+  const prompt = `
+You are ReadHub Assistant, a smart and friendly virtual news editor.
+
+A user is asking about the following news article:
+
+**Title:** ${article.title}  
+**Description:** ${article.description || "No description available."}  
+**Published At:** ${new Date(article.publishedAt).toLocaleDateString()}  
+**Source:** ${article.source?.name || "Unknown"}
+
+Please explain this news in detail.  
+- Summarize the key points clearly.  
+- Add helpful background context if relevant.  
+- Use a professional, engaging tone suitable for a general audience.
+  `;
+
+  return await chatWithGemini(prompt);
+};
+
+// --- Route Entry Point ---
 router.post("/chat", async (req, res) => {
   const { userMessage } = req.body;
 
   try {
-    const message = userMessage.toLowerCase();
-    let collection = message.includes("india") ? NewsIndia : NewsUs;
+    let reply;
 
-    // Detect book-related message
-    const isBookRequest =
-      message.includes("book") || message.includes("recommend");
-
-    if (isBookRequest) {
-      const searchTerm = encodeURIComponent(
-        userMessage.replace(/recommend( me)? (a )?book( on)?/i, "").trim()
-      );
-
-      const response = await fetch(
-        `https://openlibrary.org/search.json?q=${searchTerm}&lang=en&limit=2`
-      );
-      const data = await response.json();
-
-      const books = data.docs.slice(0, 3).map((book) => ({
-        title: book.title,
-        author: book.author_name
-          ? book.author_name.join(", ")
-          : "Unknown Author",
-        link: book.key ? `https://openlibrary.org${book.key}` : null,
-        cover: book.cover_edition_key
-          ? `https://covers.openlibrary.org/b/olid/${book.cover_edition_key}-M.jpg`
-          : `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`,
-      }));
-
-      let bookReply = `Here are some books I found:\n\n`;
-      books.forEach((book) => {
-        bookReply += `### 📘 [${book.title}](${book.link})\n`;
-        bookReply += `**Author:** ${book.author}\n`;
-        if (book.cover) {
-          bookReply += `![Cover Image](${book.cover})\n`;
-        }
-        bookReply += `\n`;
+    // Case: Asking AI about a specific news article
+    if (
+      typeof userMessage === "object" &&
+      userMessage.id &&
+      userMessage.selectedCountry
+    ) {
+      reply = await handleAskAi({
+        id: userMessage.id,
+        country: userMessage.selectedCountry,
       });
 
-      return res.json({ reply: bookReply });
+      return res.json({ reply });
+    }
+    if (!userMessage || typeof userMessage !== "string") {
+      return res.status(400).json({ error: "Invalid message" });
     }
 
-    //  Magazine summary
-    const isSummaryRequest =
-      message.includes("summarize") || message.includes("magazine");
+    const { isIndia, isBook, isSummary, matchedCategory, isNews } =
+      detectIntent(userMessage);
 
-    if (isSummaryRequest) {
-      const categorizedNews = {};
+    const collection = isIndia ? NewsIndia : NewsUs;
 
-      for (let category of categories) {
-        const articles = await collection
-          .find({ category })
-          .sort({ publishedAt: -1 })
-          .limit(5);
-        if (articles.length > 0) {
-          categorizedNews[category] = articles;
-        }
-      }
-
-      let magazineContext =
-        "Here is the categorized news to create a digital magazine:\n\n";
-
-      for (let category in categorizedNews) {
-        magazineContext += `## ${category.toUpperCase()}\n`;
-        categorizedNews[category].forEach((article) => {
-          magazineContext += `- **${article.title}**: ${article.description}\n`;
-        });
-        magazineContext += "\n";
-      }
-
+    if (isBook) {
+      reply = await handleBookRecommendation(userMessage);
+    } else if (isSummary) {
+      reply = await handleMagazineSummary(collection);
+    } else if (isNews || matchedCategory) {
+      reply = await handleGeneralNews({
+        category: matchedCategory,
+        collection,
+        userMessage,
+      });
+    } else {
+      // Fallback if no specific intent
       const prompt = `
-You are ReadHub Assistant, a smart and friendly virtual news editor.
+You're ReadHub Assistant.
 
-The user asked to summarize the latest news in a digital magazine style.
+User Message: "${userMessage}"
 
-Below is a categorized list of recent news articles:
-${magazineContext}
-
-Please turn this into a polished, friendly, and engaging magazine-style summary.
-Each section should read like a news digest, using headlines and brief summaries.
-Avoid repetition and keep a professional but conversational tone.
-`;
-
-      const geminiReply = await chatWithGemini(prompt);
-      return res.json({ reply: geminiReply });
+Respond helpfully. If appropriate, suggest user can ask for news, summaries, or book suggestions.
+      `;
+      reply = await chatWithGemini(prompt);
     }
 
-    //  General news
-    const category = categories.find((cat) => message.includes(cat));
-    let newsData = [];
-
-    if (category) {
-      newsData = await collection
-        .find({ category })
-        .sort({ publishedAt: -1 })
-        .limit(5);
-    } else if (message.includes("news")) {
-      newsData = await collection.find().sort({ publishedAt: -1 }).limit(5);
-    }
-
-    const context = newsData
-      .map((news) => `- ${news.title}: ${news.description}`)
-      .join("\n");
-
-    const prompt = `
-    You are ReadHub Assistant, a smart virtual assistant inside the ReadHub app.
-
-    User Message: "${userMessage}"
-
-    Here are the latest news articles you can reference if needed:
-    ${context}
-
-    Please respond in a helpful, friendly, and concise way.
-    `;
-
-    let geminiReply = await chatWithGemini(prompt);
-
-    if (message.includes("news")) {
-      geminiReply += `\n\nWould you like to hear more news in categories like *sports*, *technology*, or *science*?`;
-    }
-
-    res.json({ reply: geminiReply });
+    res.json({ reply });
   } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ error: "Something went wrong with the chatbot." });
+    console.error("Chatbot error:", error);
+    res.status(500).json({ error: "Something went wrong." });
   }
 });
 
