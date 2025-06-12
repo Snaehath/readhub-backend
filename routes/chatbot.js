@@ -4,6 +4,7 @@ const { chatWithGemini } = require("../models/geminiClient");
 const NewsUs = require("../models/news");
 const NewsIndia = require("../models/newsIn");
 const { Types } = require("mongoose");
+const nlp = require('compromise');
 
 const categories = [
   "technology",
@@ -14,6 +15,12 @@ const categories = [
   "entertainment",
   "politics",
 ];
+
+function extractKeywords(title) {
+  const doc = nlp(title);
+  const phrases = doc.nouns().out('array');
+  return phrases.filter(p => p.split(' ').length >= 2);
+}
 
 // --- Detect intent from message ---
 function detectIntent(message) {
@@ -143,6 +150,22 @@ const handleAskAi = async ({ id, country }) => {
     return "Sorry, I couldn't find the news article you're referring to.";
   }
 
+  const keywords = extractKeywords(article.title);
+
+   const searchRegex = keywords.map(k => new RegExp(k, 'i'));
+  const query = {
+    _id: { $ne: objectId },
+    title: { $in: searchRegex }
+  };
+
+   const relatedArticles = country === "us"
+    ? await NewsUs.find(query).limit(3)
+    : await NewsIndia.find(query).limit(3);
+
+  const relatedContext = relatedArticles.map((a, i) => (
+    `Related Article ${i + 1}:\nTitle: ${a.title}\nDescription: ${a.description || "No description"}`
+  )).join('\n\n');
+
   const prompt = `
 You are ReadHub Assistant, a smart and friendly virtual news editor.
 
@@ -153,12 +176,14 @@ A user is asking about the following news article:
 **Published At:** ${new Date(article.publishedAt).toLocaleDateString()}  
 **Source:** ${article.source?.name || "Unknown"}
 
+${relatedContext ? `\nHere are some related news articles that may help provide background:\n\n${relatedContext}` : ''}
+
 Please explain this news in detail.  
 - Summarize the key points clearly.  
 - Add helpful background context if relevant.  
 - Use a professional, engaging tone suitable for a general audience.
   `;
-
+  console.log(relatedContext)
   return await chatWithGemini(prompt);
 };
 
