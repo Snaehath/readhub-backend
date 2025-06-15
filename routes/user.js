@@ -1,0 +1,82 @@
+const express = require("express");
+const router = express.Router();
+const bcrypt = require("bcrypt");
+const User = require("../models/user");
+
+router.post("/addUser", async (req, res) => {
+  try {
+    const { email, username, password, avatar } = req.body;
+
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ error: "Email and password are required." });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res
+        .status(409)
+        .json({ error: "User already exists with this email." });
+    }
+
+    // Create new user
+    const newUser = new User({
+      email,
+      username,
+      passwordhash: await bcrypt.hash(password, 10),
+      avatar,
+      likes_us: [],
+      likes_in: [],
+      bookmarks_us: [],
+      bookmarks_in: [],
+    });
+    await newUser.save();
+    res.status(201).json({ message: "User created successfully" });
+  } catch (err) {
+    console.error("Error creating user:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ error: "Email and password are required." });
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    // Compare passwords
+    const isMatch = await bcrypt.compare(password, user.passwordhash);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid password." });
+    }
+
+    // Success: optionally generate JWT here
+    res.status(200).json({
+      message: "Login successful",
+      user: {
+        id: user._id,
+        email: user.email,
+        username: user.username,
+        avatar: user.avatar,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+module.exports = router;

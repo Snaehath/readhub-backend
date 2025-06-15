@@ -175,6 +175,7 @@ A user is asking about the following news article:
 **Description:** ${article.description || "No description available."}  
 **Published At:** ${new Date(article.publishedAt).toLocaleDateString()}  
 **Source:** ${article.source?.name || "Unknown"}
+**Related Articles:** ${relatedArticles.map(a =>{a.title})}
 
 ${relatedContext ? `\nHere are some related news articles that may help provide background:\n\n${relatedContext}` : ''}
 
@@ -183,7 +184,6 @@ Please explain this news in detail.
 - Add helpful background context if relevant.  
 - Use a professional, engaging tone suitable for a general audience.
   `;
-  console.log(relatedContext)
   return await chatWithGemini(prompt);
 };
 

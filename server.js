@@ -6,6 +6,7 @@ const cors = require('cors');
 const newsRoutes = require("./routes/news");
 const booksRoutes = require("./routes/books")
 const chatBotRoute = require("./routes/chatbot")
+const userRoutes = require("./routes/user")
 
 const app = express();
 app.use(cors());
@@ -20,6 +21,7 @@ mongoose
 
 app.use("/api/news", newsRoutes);
 app.use("/api/books", booksRoutes);
+app.use("/api/user", userRoutes);
 app.use('/api/ai',chatBotRoute)
 
 const PORT = process.env.PORT || 5000;
