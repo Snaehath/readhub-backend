@@ -219,7 +219,7 @@ router.get("/fetch-categories/in", async (req, res) => {
       )}`,
     });
   } catch (err) {
-    console.error("Error fetching multiple categories:", err.message);
+    console.error("Error fetching multiple categories:", err);
     res.status(500).json({ error: "Failed to fetch multiple categories" });
   }
 });
@@ -233,4 +233,80 @@ router.get("/", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch news from database" });
   }
 });
+
+// DELETE /api/news/delete-today/us
+router.delete("/delete-today/us", async (req, res) => {
+  try {
+    // Get current UTC date and subtract 1 day to adjust for IST timezone
+    const now = new Date();
+    const istAdjustedDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Get start of the adjusted day (00:00:00) and end (23:59:59)
+    const startOfDay = new Date(
+      istAdjustedDate.getFullYear(),
+      istAdjustedDate.getMonth(),
+      istAdjustedDate.getDate()
+    );
+    const endOfDay = new Date(
+      istAdjustedDate.getFullYear(),
+      istAdjustedDate.getMonth(),
+      istAdjustedDate.getDate(),
+      23, 59, 59, 999
+    );
+
+    // Delete articles within that day range
+    const result = await News.deleteMany({
+      publishedAt: {
+        $gte: startOfDay.toISOString(),
+        $lte: endOfDay.toISOString(),
+      },
+    });
+
+    res.status(200).json({
+      message: "Deleted USA news articles for adjusted 'today'",
+      deletedCount: result.deletedCount,
+      from: startOfDay.toISOString(),
+      to: endOfDay.toISOString(),
+    });
+  } catch (error) {
+    console.error("Error deleting articles:", error.message);
+    res.status(500).json({ error: "Failed to delete articles" });
+  }
+});
+router.delete("/delete-today/in", async (req, res) => {
+  try {
+    const now = new Date();
+
+
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+    const endOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23, 59, 59, 999
+    );
+
+    const result = await NewsIn.deleteMany({
+      publishedAt: {
+        $gte: startOfDay.toISOString(),
+        $lte: endOfDay.toISOString(),
+      },
+    });
+
+    res.status(200).json({
+      message: "Deleted India news articles for today (IST)",
+      deletedCount: result.deletedCount,
+      from: startOfDay.toISOString(),
+      to: endOfDay.toISOString(),
+    });
+  } catch (error) {
+    console.error("Error deleting India news:", error.message);
+    res.status(500).json({ error: "Failed to delete India news" });
+  }
+});
+
 module.exports = router;

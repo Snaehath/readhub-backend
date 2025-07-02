@@ -24,5 +24,10 @@ app.use("/api/books", booksRoutes);
 app.use("/api/user", userRoutes);
 app.use('/api/ai',chatBotRoute)
 
+app.post("/api/ping", (req, res) => {
+  console.log("Received ping from frontend");
+  res.status(200).json({ message: "Success" });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
