@@ -5,6 +5,7 @@ const NewsUs = require("../models/news");
 const NewsIndia = require("../models/newsIn");
 const { Types } = require("mongoose");
 const nlp = require('compromise');
+const {verifyToken} = require("../helper/authJwt")
 
 const categories = [
   "technology",
@@ -190,6 +191,14 @@ Please explain this news in detail.
 // --- Route Entry Point ---
 router.post("/chat", async (req, res) => {
   const { userMessage } = req.body;
+  const authHeader = req.headers.authorization
+  const token = authHeader && authHeader.split(" ")[1]
+
+  const user = verifyToken(token)
+
+  if(!user){
+    return res.status(401).json({message:"Unauthorized: Invalid or missing token"})
+  }
 
   try {
     let reply;
