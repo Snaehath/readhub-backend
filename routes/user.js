@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcrypt");
 const User = require("../models/user");
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = process.env.JWT_SECRET; // Make sure this is set in .env or Render
 
 router.post("/addUser", async (req, res) => {
   try {
@@ -62,9 +64,20 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid password." });
     }
 
-    // Success: optionally generate JWT here
+    // ✅ Generate JWT Token
+    const token = jwt.sign(
+      {
+        userId: user._id,
+        email: user.email,
+      },
+      JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    // ✅ Respond with token and user info
     res.status(200).json({
       message: "Login successful",
+      token,
       user: {
         id: user._id,
         email: user.email,
