@@ -224,13 +224,58 @@ router.get("/fetch-categories/in", async (req, res) => {
   }
 });
 // Get latest news from DB
-router.get("/", async (req, res) => {
+router.get("/new/pagination", async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 12;
+  const category = req.query.category;
+
   try {
-    const news = await News.find().sort({ publishedAt: -1 }).limit(20);
-    res.json(news);
+    const options = {
+      page,
+      limit,
+      sort: { publishedAt: -1 },
+    };
+
+    const query = category && category !== "all" ? { category: category } : {}; // no category filter if "all"
+
+    const result = await News.paginate(query, options);
+
+    res.json({
+      currentPage: result.page,
+      totalPages: result.totalPages,
+      totalArticles: result.totalDocs,
+      articles: result.docs,
+    });
   } catch (err) {
-    console.error("Error fetching from DB:", err.message);
-    res.status(500).json({ error: "Failed to fetch news from database" });
+    console.error("Error fetching paginated US news:", err.message);
+    res.status(500).json({ error: "Failed to fetch paginated news" });
+  }
+});
+router.get("/newIn/pagination", async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 12;
+  const category = req.query.category;
+
+  try {
+    const options = {
+      page,
+      limit,
+      sort: { publishedAt: -1 },
+    };
+
+    const query = category && category !== "all" ? { category: category } : {}; // no category filter if "all"
+
+    const result = await NewsIn.paginate(query, options);
+
+    res.json({
+      currentPage: result.page,
+      totalPages: result.totalPages,
+      totalArticles: result.totalDocs,
+      articles: result.docs,
+    });
+  } catch (err) {
+    console.error("Error fetching paginated IN news:", err.message);
+    res.status(500).json({ error: "Failed to fetch paginated news" });
   }
 });
 
@@ -251,7 +296,10 @@ router.delete("/delete-today/us", async (req, res) => {
       istAdjustedDate.getFullYear(),
       istAdjustedDate.getMonth(),
       istAdjustedDate.getDate(),
-      23, 59, 59, 999
+      23,
+      59,
+      59,
+      999
     );
 
     // Delete articles within that day range
@@ -277,7 +325,6 @@ router.delete("/delete-today/in", async (req, res) => {
   try {
     const now = new Date();
 
-
     const startOfDay = new Date(
       now.getFullYear(),
       now.getMonth(),
@@ -287,7 +334,10 @@ router.delete("/delete-today/in", async (req, res) => {
       now.getFullYear(),
       now.getMonth(),
       now.getDate(),
-      23, 59, 59, 999
+      23,
+      59,
+      59,
+      999
     );
 
     const result = await NewsIn.deleteMany({
