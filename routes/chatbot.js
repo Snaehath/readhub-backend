@@ -4,8 +4,8 @@ const { chatWithGemini } = require("../models/geminiClient");
 const NewsUs = require("../models/news");
 const NewsIndia = require("../models/newsIn");
 const { Types } = require("mongoose");
-const nlp = require('compromise');
-const {verifyToken} = require("../helper/authJwt")
+const nlp = require("compromise");
+const { verifyToken } = require("../helper/authJwt");
 
 const categories = [
   "technology",
@@ -19,8 +19,8 @@ const categories = [
 
 function extractKeywords(title) {
   const doc = nlp(title);
-  const phrases = doc.nouns().out('array');
-  return phrases.filter(p => p.split(' ').length >= 2);
+  const phrases = doc.nouns().out("array");
+  return phrases.filter((p) => p.split(" ").length >= 2);
 }
 
 // --- Detect intent from message ---
@@ -153,19 +153,25 @@ const handleAskAi = async ({ id, country }) => {
 
   const keywords = extractKeywords(article.title);
 
-   const searchRegex = keywords.map(k => new RegExp(k, 'i'));
+  const searchRegex = keywords.map((k) => new RegExp(k, "i"));
   const query = {
     _id: { $ne: objectId },
-    title: { $in: searchRegex }
+    title: { $in: searchRegex },
   };
 
-   const relatedArticles = country === "us"
-    ? await NewsUs.find(query).limit(3)
-    : await NewsIndia.find(query).limit(3);
+  const relatedArticles =
+    country === "us"
+      ? await NewsUs.find(query).limit(3)
+      : await NewsIndia.find(query).limit(3);
 
-  const relatedContext = relatedArticles.map((a, i) => (
-    `Related Article ${i + 1}:\nTitle: ${a.title}\nDescription: ${a.description || "No description"}`
-  )).join('\n\n');
+  const relatedContext = relatedArticles
+    .map(
+      (a, i) =>
+        `Related Article ${i + 1}:\nTitle: ${a.title}\nDescription: ${
+          a.description || "No description"
+        }`
+    )
+    .join("\n\n");
 
   const prompt = `
 You are ReadHub Assistant, a smart and friendly virtual news editor.
@@ -176,9 +182,15 @@ A user is asking about the following news article:
 **Description:** ${article.description || "No description available."}  
 **Published At:** ${new Date(article.publishedAt).toLocaleDateString()}  
 **Source:** ${article.source?.name || "Unknown"}
-**Related Articles:** ${relatedArticles.map(a =>{a.title})}
+**Related Articles:** ${relatedArticles.map((a) => {
+    a.title;
+  })}
 
-${relatedContext ? `\nHere are some related news articles that may help provide background:\n\n${relatedContext}` : ''}
+${
+  relatedContext
+    ? `\nHere are some related news articles that may help provide background:\n\n${relatedContext}`
+    : ""
+}
 
 Please explain this news in detail.  
 - Summarize the key points clearly.  
@@ -188,16 +200,56 @@ Please explain this news in detail.
   return await chatWithGemini(prompt);
 };
 
+router.post("/futureNews", async (req, res) => {
+  try {
+    let article;
+    const { id, country } = req.body;
+    const objectId = Types.ObjectId.createFromHexString(id);
+
+    if (country === "us") {
+      article = await NewsUs.findOne({ _id: objectId });
+    } else if (country === "in") {
+      article = await NewsIndia.findOne({ _id: objectId });
+    }
+
+    if (!article) {
+      return res.status(404).json({
+        message: "Sorry, I couldn't find the news article you're referring to.",
+      });
+    }
+
+    const prompt = `
+You are a news journalist writing a follow-up article approximately 6 to 12 months after this original story was published. Use realistic developments, such as investigations, policy changes, market reactions, public opinion shifts, or any ongoing consequences. Your goal is to create a plausible news update that would be published one year later.
+
+Original Article:
+Title: "${article.title}"
+Content: ${article.content}
+
+Now write a new article titled: "1 Year Later: ${article.title}"
+Make sure it feels like a professional news story — clear, concise, and realistic.
+`;
+
+    const futureArticle = await chatWithGemini(prompt);
+
+    return res.status(200).json({ futureArticle });
+  } catch (error) {
+    console.error("Error generating future news:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 // --- Route Entry Point ---
 router.post("/chat", async (req, res) => {
   const { userMessage } = req.body;
-  const authHeader = req.headers.authorization
-  const token = authHeader && authHeader.split(" ")[1]
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
 
-  const user = verifyToken(token)
+  const user = verifyToken(token);
 
-  if(!user){
-    return res.status(401).json({message:"Unauthorized: Invalid or missing token"})
+  if (!user) {
+    return res
+      .status(401)
+      .json({ message: "Unauthorized: Invalid or missing token" });
   }
 
   try {
