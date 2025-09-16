@@ -64,7 +64,7 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid password." });
     }
 
-    // ✅ Generate JWT Token
+    // Generate JWT Token
     const token = jwt.sign(
       {
         userId: user._id,
@@ -74,7 +74,7 @@ router.post("/login", async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    // ✅ Respond with token and user info
+    // Respond with token and user info
     res.status(200).json({
       message: "Login successful",
       token,
