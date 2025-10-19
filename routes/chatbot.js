@@ -82,19 +82,23 @@ async function handleMagazineSummary(collection) {
   for (let cat in categorizedNews) {
     newsDigest += `## ${cat.toUpperCase()}\n`;
     categorizedNews[cat].forEach((item) => {
-      newsDigest += `- **${item.title}**: ${item.description}\n`;
+      newsDigest += `- ${item.title}: ${
+        item.description || "No description"
+      }\n`;
     });
-    newsDigest += `\n`;
+    newsDigest += "\n";
   }
 
   const prompt = `
-You are ReadHub Assistant, a smart and friendly virtual news editor.
+You are ReadHub Assistant.
 
-Turn the following categorized list of news into a polished digital magazine:
+Turn the following categorized list of news into a concise digital magazine:
 ${newsDigest}
 
-Use a professional, friendly tone. Include clear headlines and brief summaries.
-  `;
+Respond strictly with the content only. 
+Do NOT include greetings, introductions, suggestions, questions, or sign-offs.
+Use clear headlines and brief summaries for each category.
+`;
 
   return await chatWithGemini(prompt);
 }
@@ -113,27 +117,23 @@ async function handleGeneralNews({ category, collection, userMessage }) {
   }
 
   const context = newsData
-    .map((n) => `- ${n.title}: ${n.description}`)
+    .map((n) => `- ${n.title}: ${n.description || "No description"}`)
     .join("\n");
 
   const prompt = `
-You are ReadHub Assistant, an intelligent virtual news companion.
+You are ReadHub Assistant.
 
 User asked: "${userMessage}"
 
 Here are the latest news articles:
 ${context}
 
-Please craft a friendly, helpful response. Suggest follow-up categories if relevant.
-  `;
+Respond strictly with the content only. 
+Do NOT include greetings, introductions, suggestions, questions, or sign-offs.
+Summarize the news clearly and concisely.
+`;
 
-  let reply = await chatWithGemini(prompt);
-
-  if (!category && userMessage.toLowerCase().includes("news")) {
-    reply += `\n\nWould you like to hear more news in *sports*, *technology*, or *science*?`;
-  }
-
-  return reply;
+  return await chatWithGemini(prompt);
 }
 
 // --- Ask AI - Explaining the Particular News ---
@@ -201,36 +201,36 @@ Please explain this news in detail.
   return await chatWithGemini(prompt);
 };
 
+// --- Future News ---
 router.post("/futureNews", async (req, res) => {
   try {
-    let article;
     const { id, selectedCountry } = req.body;
     const objectId = Types.ObjectId.createFromHexString(id);
 
-    if (selectedCountry === "us") {
-      article = await NewsUs.findOne({ _id: objectId });
-    } else if (selectedCountry === "in") {
-      article = await NewsIndia.findOne({ _id: objectId });
-    }
+    const article =
+      selectedCountry === "us"
+        ? await NewsUs.findOne({ _id: objectId })
+        : await NewsIndia.findOne({ _id: objectId });
 
-    if (!article) {
-      return res.status(404).json({
-        message: "Sorry, I couldn't find the news article you're referring to.",
-      });
-    }
+    if (!article)
+      return res.status(404).json({ message: "Article not found." });
 
     const prompt = `
-You are a news journalist writing a follow-up article approximately 6 to 12 months after this original story was published. Use realistic developments, such as investigations, policy changes, market reactions, public opinion shifts, or any ongoing consequences. Your goal is to create a plausible news update that would be published one year later.
+You are a news journalist writing a follow-up article 6 to 12 months after the original story.
 
 Original Article:
 Title: "${article.title}"
 Content: ${article.content}
-url:${article.url}
-urlToImage:${article.urlToImage}
+URL: ${article.url}
+URLToImage: ${article.urlToImage}
 Published At: ${article.publishedAt}
 
-Now write a new article titled: "${article.title}"
-Make sure it feels like a professional news story — clear, concise, and realistic.
+Write a new article as a professional news story. 
+Include a clear **disclaimer** at the top stating that this is a plausible future scenario and not actual reporting. 
+
+Respond strictly with the content only. 
+Do NOT include greetings, commentary, suggestions, or questions. 
+Make it clear, concise, and realistic.
 `;
 
     const futureArticle = await chatWithGemini(prompt);
