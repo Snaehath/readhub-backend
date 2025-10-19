@@ -192,10 +192,11 @@ ${
     : ""
 }
 
-Please explain this news in detail.  
+Please explain this news in detail.
 - Summarize the key points clearly.  
 - Add helpful background context if relevant.  
 - Use a professional, engaging tone suitable for a general audience.
+- Reduce the use of new lines.
   `;
   return await chatWithGemini(prompt);
 };
@@ -203,12 +204,12 @@ Please explain this news in detail.
 router.post("/futureNews", async (req, res) => {
   try {
     let article;
-    const { id, country } = req.body;
+    const { id, selectedCountry } = req.body;
     const objectId = Types.ObjectId.createFromHexString(id);
 
-    if (country === "us") {
+    if (selectedCountry === "us") {
       article = await NewsUs.findOne({ _id: objectId });
-    } else if (country === "in") {
+    } else if (selectedCountry === "in") {
       article = await NewsIndia.findOne({ _id: objectId });
     }
 
@@ -224,8 +225,11 @@ You are a news journalist writing a follow-up article approximately 6 to 12 mont
 Original Article:
 Title: "${article.title}"
 Content: ${article.content}
+url:${article.url}
+urlToImage:${article.urlToImage}
+Published At: ${article.publishedAt}
 
-Now write a new article titled: "1 Year Later: ${article.title}"
+Now write a new article titled: "${article.title}"
 Make sure it feels like a professional news story — clear, concise, and realistic.
 `;
 
