@@ -204,7 +204,8 @@ Please explain this news in detail.
 // --- Future News ---
 router.post("/futureNews", async (req, res) => {
   try {
-    const { id, selectedCountry } = req.body;
+    const { userMessage } = req.body;
+    const { id, selectedCountry } = userMessage;
     const objectId = Types.ObjectId.createFromHexString(id);
 
     const article =
@@ -216,7 +217,7 @@ router.post("/futureNews", async (req, res) => {
       return res.status(404).json({ message: "Article not found." });
 
     const prompt = `
-You are a news journalist writing a follow-up article 6 to 12 months after the original story.
+You are an experienced, professional news journalist tasked with writing a speculative future news article based on an original story. 
 
 Original Article:
 Title: "${article.title}"
@@ -225,12 +226,28 @@ URL: ${article.url}
 URLToImage: ${article.urlToImage}
 Published At: ${article.publishedAt}
 
-Write a new article as a professional news story. 
-Include a clear **disclaimer** at the top stating that this is a plausible future scenario and not actual reporting. 
+Your task:
+- Write a compelling, professional news article that reads like it could appear in a top-tier news publication.
+- Include a clear **disclaimer** at the top: this is a plausible future scenario and not actual reporting.
+- Use the original article's content and URL as a reference throughout the story, making it feel like a follow-up or continuation of the original report.
+- Structure the article as a **timeline of events every 6 months** over the next 3 years (6 milestones in total). Use bold subheadings for each interval.
+- Make the article engaging and dynamic: include conflicts, breakthroughs, challenges, surprises, or important developments.
+- Include plausible expert quotes, statistics, and consequences where appropriate.
+- Keep sentences clear, concise, and in active voice with a professional journalistic style.
+- End with a strong conclusion highlighting potential implications or next steps.
 
-Respond strictly with the content only. 
-Do NOT include greetings, commentary, suggestions, or questions. 
-Make it clear, concise, and realistic.
+Timeline structure with suggested hooks and references:
+**After 6 months:** Start with a dramatic or surprising development, referencing the original article at ${article.url} as context.  
+**After 12 months:** Highlight a key turning point or challenge, connecting it back to the events described in the original article.  
+**After 18 months:** Show consequences of earlier events, citing the original story where relevant.  
+**After 24 months:** Present breakthroughs, resolutions, or escalating challenges while grounding them in the original article’s context.  
+**After 30 months:** Describe reactions from key stakeholders, public responses, or unexpected developments, referencing the original article where appropriate.  
+**After 36 months:** Conclude with long-term outcomes, lessons learned, and potential implications, tying back to the original article to make the follow-up cohesive.
+
+Rules:
+- Respond strictly with the article content only.
+- Do NOT include greetings, commentary, suggestions, or questions.
+- Ensure the article feels realistic, informative, and highly engaging for readers.
 `;
 
     const futureArticle = await chatWithGemini(prompt);
