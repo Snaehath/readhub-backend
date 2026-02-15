@@ -72,13 +72,13 @@ You are an experienced investigative journalist and trend analyst specializing i
 - Source: ${article.url}
 
 **Your Assignment:**
-Write a compelling speculative news article projecting how this story might evolve over the next 3 years.
+Write a compelling speculative news article projecting how this story might evolve over the next 2 years.
 
 **Structure:**
-Create a timeline with 6 milestones (every 6 months) showing plausible future developments.
+Create a timeline with 4 milestones (every 6 months) showing plausible future developments.
 
 **For each milestone, include:**
-- A bold subheading: "**6 Months Later**", "**12 Months Later**", etc.
+- A bold subheading: "**6 Months Later**", "**1 Year Later**", "**1 Year 6 Months Later**", etc.
 - Realistic developments, challenges, or breakthroughs
 - Plausible expert quotes or statistics
 - References to the original article where relevant
