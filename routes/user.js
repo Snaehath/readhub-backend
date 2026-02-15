@@ -34,7 +34,15 @@ router.post("/addUser", async (req, res) => {
       bookmarks_in: [],
     });
     await newUser.save();
-    res.status(201).json({ message: "User created successfully" });
+    res.status(201).json({
+      message: "User created successfully",
+      user: {
+        id: newUser._id,
+        email: newUser.email,
+        username: newUser.username,
+        avatar: newUser.avatar,
+      },
+    });
   } catch (err) {
     console.error("Error creating user:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -71,7 +79,7 @@ router.post("/login", async (req, res) => {
         email: user.email,
       },
       JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "1d" },
     );
 
     // Respond with token and user info
@@ -88,6 +96,41 @@ router.post("/login", async (req, res) => {
     });
   } catch (err) {
     console.error("Login error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/update", async (req, res) => {
+  try {
+    const { userId, username, avatar } = req.body;
+
+    // Validate userId
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required." });
+    }
+
+    // Find user by ID
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    // Update user properties
+    if (username !== undefined) user.username = username;
+    if (avatar !== undefined) user.avatar = avatar;
+
+    await user.save();
+    res.status(200).json({
+      message: "User updated successfully",
+      user: {
+        id: user._id,
+        email: user.email,
+        username: user.username,
+        avatar: user.avatar,
+      },
+    });
+  } catch (err) {
+    console.error("Error updating user:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

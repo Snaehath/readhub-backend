@@ -6,6 +6,7 @@ const NewsIndia = require("../models/newsIn");
 const { Types } = require("mongoose");
 const nlp = require("compromise");
 const { verifyToken } = require("../helper/authJwt");
+const PROMPTS = require("../helper/prompts");
 
 const categories = [
   "technology",
@@ -38,11 +39,11 @@ function detectIntent(message) {
 // --- Book Recommendation ---
 async function handleBookRecommendation(userMessage) {
   const searchTerm = encodeURIComponent(
-    userMessage.replace(/recommend( me)? (a )?book( on)?/i, "").trim()
+    userMessage.replace(/recommend( me)? (a )?book( on)?/i, "").trim(),
   );
 
   const response = await fetch(
-    `https://openlibrary.org/search.json?q=${searchTerm}&lang=en&limit=2`
+    `https://openlibrary.org/search.json?q=${searchTerm}&lang=en&limit=2`,
   );
   const data = await response.json();
 
@@ -89,16 +90,7 @@ async function handleMagazineSummary(collection) {
     newsDigest += "\n";
   }
 
-  const prompt = `
-You are ReadHub Assistant.
-
-Turn the following categorized list of news into a concise digital magazine:
-${newsDigest}
-
-Respond strictly with the content only. 
-Do NOT include greetings, introductions, suggestions, questions, or sign-offs.
-Use clear headlines and brief summaries for each category.
-`;
+  const prompt = PROMPTS.magazineSummary(newsDigest);
 
   return await chatWithGemini(prompt);
 }
@@ -120,18 +112,7 @@ async function handleGeneralNews({ category, collection, userMessage }) {
     .map((n) => `- ${n.title}: ${n.description || "No description"}`)
     .join("\n");
 
-  const prompt = `
-You are ReadHub Assistant.
-
-User asked: "${userMessage}"
-
-Here are the latest news articles:
-${context}
-
-Respond strictly with the content only. 
-Do NOT include greetings, introductions, suggestions, questions, or sign-offs.
-Summarize the news clearly and concisely.
-`;
+  const prompt = PROMPTS.generalNews(userMessage, context);
 
   return await chatWithGemini(prompt);
 }
@@ -169,35 +150,11 @@ const handleAskAi = async ({ id, country }) => {
       (a, i) =>
         `Related Article ${i + 1}:\nTitle: ${a.title}\nDescription: ${
           a.description || "No description"
-        }`
+        }`,
     )
     .join("\n\n");
 
-  const prompt = `
-You are ReadHub Assistant, a smart and friendly virtual news editor.
-
-A user is asking about the following news article:
-
-**Title:** ${article.title}  
-**Description:** ${article.description || "No description available."}  
-**Published At:** ${new Date(article.publishedAt).toLocaleDateString()}  
-**Source:** ${article.source?.name || "Unknown"}
-**Related Articles:** ${relatedArticles.map((a) => {
-    a.title;
-  })}
-
-${
-  relatedContext
-    ? `\nHere are some related news articles that may help provide background:\n\n${relatedContext}`
-    : ""
-}
-
-Please explain this news in detail.
-- Summarize the key points clearly.  
-- Add helpful background context if relevant.  
-- Use a professional, engaging tone suitable for a general audience.
-- Reduce the use of new lines.
-  `;
+  const prompt = PROMPTS.askAi(article, relatedContext);
   return await chatWithGemini(prompt);
 };
 
@@ -216,39 +173,7 @@ router.post("/futureNews", async (req, res) => {
     if (!article)
       return res.status(404).json({ message: "Article not found." });
 
-    const prompt = `
-You are an experienced, professional news journalist tasked with writing a speculative future news article based on an original story. 
-
-Original Article:
-Title: "${article.title}"
-Content: ${article.content}
-URL: ${article.url}
-URLToImage: ${article.urlToImage}
-Published At: ${article.publishedAt}
-
-Your task:
-- Write a compelling, professional news article that reads like it could appear in a top-tier news publication.
-- Include a clear **disclaimer** at the top: this is a plausible future scenario and not actual reporting.
-- Use the original article's content and URL as a reference throughout the story, making it feel like a follow-up or continuation of the original report.
-- Structure the article as a **timeline of events every 6 months** over the next 3 years (6 milestones in total). Use bold subheadings for each interval.
-- Make the article engaging and dynamic: include conflicts, breakthroughs, challenges, surprises, or important developments.
-- Include plausible expert quotes, statistics, and consequences where appropriate.
-- Keep sentences clear, concise, and in active voice with a professional journalistic style.
-- End with a strong conclusion highlighting potential implications or next steps.
-
-Timeline structure with suggested hooks and references:
-**After 6 months:** Start with a dramatic or surprising development, referencing the original article at ${article.url} as context.  
-**After 12 months:** Highlight a key turning point or challenge, connecting it back to the events described in the original article.  
-**After 18 months:** Show consequences of earlier events, citing the original story where relevant.  
-**After 24 months:** Present breakthroughs, resolutions, or escalating challenges while grounding them in the original article’s context.  
-**After 30 months:** Describe reactions from key stakeholders, public responses, or unexpected developments, referencing the original article where appropriate.  
-**After 36 months:** Conclude with long-term outcomes, lessons learned, and potential implications, tying back to the original article to make the follow-up cohesive.
-
-Rules:
-- Respond strictly with the article content only.
-- Do NOT include greetings, commentary, suggestions, or questions.
-- Ensure the article feels realistic, informative, and highly engaging for readers.
-`;
+    const prompt = PROMPTS.futureNews(article);
 
     const futureArticle = await chatWithGemini(prompt);
 
@@ -310,13 +235,7 @@ router.post("/chat", async (req, res) => {
       });
     } else {
       // Fallback if no specific intent
-      const prompt = `
-You're ReadHub Assistant.
-
-User Message: "${userMessage}"
-
-Respond helpfully. If appropriate, suggest user can ask for news, summaries, or book suggestions.
-      `;
+      const prompt = PROMPTS.fallback(userMessage);
       reply = await chatWithGemini(prompt);
     }
 
