@@ -1,7 +1,11 @@
 const express = require("express");
 const axios = require("axios");
+const https = require("https");
 const News = require("../models/news");
 const NewsIn = require("../models/newsIn");
+
+// Force IPv4 to prevent ETIMEDOUT on Render
+const httpsAgent = new https.Agent({ family: 4 });
 
 const router = express.Router();
 
@@ -9,7 +13,7 @@ const router = express.Router();
 router.get("/fetch/us", async (req, res) => {
   try {
     const response = await axios.get(
-      `https://newsapi.org/v2/top-headlines?country=us&pageSize=40&apiKey=${process.env.NEWS_API_KEY}`
+      `https://newsapi.org/v2/top-headlines?country=us&pageSize=40&apiKey=${process.env.NEWS_API_KEY}`,
     );
 
     const articles = response.data.articles.filter((a) => a.description);
@@ -29,7 +33,7 @@ router.get("/fetch/us", async (req, res) => {
           return saved;
         }
         return null;
-      })
+      }),
     );
 
     res.status(200).json({ message: "Fetched and saved news." });
@@ -43,7 +47,7 @@ router.get("/fetch/us", async (req, res) => {
 router.get("/fetch/in", async (req, res) => {
   try {
     const response = await axios.get(
-      `https://gnews.io/api/v4/top-headlines?lang=en&category=general&max=10&apikey=${process.env.GNEWS_API_KEY}`
+      `https://gnews.io/api/v4/top-headlines?lang=en&category=general&max=10&apikey=${process.env.GNEWS_API_KEY}`,
     );
 
     const articles = response.data.articles.filter((a) => a.description);
@@ -64,7 +68,7 @@ router.get("/fetch/in", async (req, res) => {
           return saved;
         }
         return null;
-      })
+      }),
     );
 
     res.status(200).json({ message: "Fetched and saved news." });
@@ -97,14 +101,14 @@ router.get("/fetch-categories/us", async (req, res) => {
     const fetchPromises = categories.map((category) =>
       axios
         .get(
-          `https://newsapi.org/v2/top-headlines?category=${category}&pageSize=10&apiKey=${process.env.NEWS_API_KEY}`
+          `https://newsapi.org/v2/top-headlines?category=${category}&pageSize=10&apiKey=${process.env.NEWS_API_KEY}`,
         )
         .then((response) => ({
           category,
           articles: response.data.articles.filter(
-            (a) => a.description && a.urlToImage
+            (a) => a.description && a.urlToImage,
           ),
-        }))
+        })),
     );
 
     const allFetchedData = await Promise.all(fetchPromises);
@@ -129,10 +133,10 @@ router.get("/fetch-categories/us", async (req, res) => {
                 category: category,
               },
             },
-            { upsert: true, new: true }
+            { upsert: true, new: true },
           );
           return updated;
-        })
+        }),
       );
 
       allSavedArticles = allSavedArticles.concat(savedArticles);
@@ -140,7 +144,7 @@ router.get("/fetch-categories/us", async (req, res) => {
 
     res.status(200).json({
       message: `Fetched and saved articles for categories: ${categories.join(
-        ", "
+        ", ",
       )}`,
     });
   } catch (err) {
@@ -163,24 +167,42 @@ router.get("/fetch-categories/in", async (req, res) => {
       "politics",
     ];
 
-    if (categories.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "At least one category is required" });
+    if (!process.env.GNEWS_API_KEY) {
+      console.error("GNEWS_API_KEY is missing in environment variables.");
+      return res.status(500).json({ error: "GNews API configuration missing" });
     }
 
     let allFetchedData = [];
 
     for (const category of categories) {
-      const response = await axios.get(
-        `https://gnews.io/api/v4/top-headlines?country=in&lang=en&category=${category}&max=10&apikey=${process.env.GNEWS_API_KEY}`
+      try {
+        // GNews doesn't support 'politics', map it to 'nation'
+        const gnewsCategory = category === "politics" ? "nation" : category;
+
+        const response = await axios.get(
+          `https://gnews.io/api/v4/top-headlines?country=in&lang=en&category=${gnewsCategory}&max=10&apikey=${process.env.GNEWS_API_KEY}`,
+          {
+            httpsAgent,
+            timeout: 15000, // 15s timeout
+          },
+        );
+
+        const articles = response.data.articles.filter((a) => a.description);
+        allFetchedData.push({ category, articles });
+
+        await delay(1200);
+      } catch (catErr) {
+        console.error(
+          `Error fetching category ${category} for India:`,
+          catErr.message,
+        );
+      }
+    }
+
+    if (allFetchedData.length === 0) {
+      throw new Error(
+        "Failed to fetch any articles from GNews after all retries",
       );
-
-      const articles = response.data.articles.filter((a) => a.description);
-
-      allFetchedData.push({ category, articles });
-
-      await delay(1500); //wait 1.5 seconds before next request
     }
 
     let allSavedArticles = [];
@@ -188,39 +210,47 @@ router.get("/fetch-categories/in", async (req, res) => {
     for (const { category, articles } of allFetchedData) {
       const savedArticles = await Promise.all(
         articles.map(async (article) => {
-          const updated = await NewsIn.findOneAndUpdate(
-            { title: article.title },
-            {
-              $setOnInsert: {
-                title: article.title,
-                description: article.description,
-                content: article.content,
-                url: article.url,
-                urlToImage: article.image,
-                publishedAt: article.publishedAt,
-                source: article.source,
+          try {
+            const updated = await NewsIn.findOneAndUpdate(
+              { title: article.title },
+              {
+                $setOnInsert: {
+                  title: article.title,
+                  description: article.description,
+                  content: article.content,
+                  url: article.url,
+                  urlToImage: article.image,
+                  publishedAt: article.publishedAt,
+                  source: article.source,
+                },
+                $addToSet: {
+                  category: category,
+                },
               },
-              $addToSet: {
-                category: category,
-              },
-            },
-            { upsert: true, new: true }
-          );
-          return updated;
-        })
+              { upsert: true, new: true },
+            );
+            return updated;
+          } catch (dbErr) {
+            console.error("Database error saving article:", dbErr.message);
+            return null;
+          }
+        }),
       );
 
-      allSavedArticles = allSavedArticles.concat(savedArticles);
+      allSavedArticles = allSavedArticles.concat(savedArticles.filter(Boolean));
     }
 
     res.status(200).json({
-      message: `Fetched and saved articles for categories: ${categories.join(
-        ", "
-      )}`,
+      message: `Fetched and saved articles for categories: ${allFetchedData.map((d) => d.category).join(", ")}`,
     });
   } catch (err) {
-    console.error("Error fetching multiple categories:", err);
-    res.status(500).json({ error: "Failed to fetch multiple categories" });
+    console.error("Critical error in fetch-categories/in:", err.message);
+    res
+      .status(500)
+      .json({
+        error: "Failed to fetch multiple categories",
+        detail: err.message,
+      });
   }
 });
 // Get latest news from DB
@@ -290,7 +320,7 @@ router.delete("/delete-today/us", async (req, res) => {
     const startOfDay = new Date(
       istAdjustedDate.getFullYear(),
       istAdjustedDate.getMonth(),
-      istAdjustedDate.getDate()
+      istAdjustedDate.getDate(),
     );
     const endOfDay = new Date(
       istAdjustedDate.getFullYear(),
@@ -299,7 +329,7 @@ router.delete("/delete-today/us", async (req, res) => {
       23,
       59,
       59,
-      999
+      999,
     );
 
     // Delete articles within that day range
@@ -328,7 +358,7 @@ router.delete("/delete-today/in", async (req, res) => {
     const startOfDay = new Date(
       now.getFullYear(),
       now.getMonth(),
-      now.getDate()
+      now.getDate(),
     );
     const endOfDay = new Date(
       now.getFullYear(),
@@ -337,7 +367,7 @@ router.delete("/delete-today/in", async (req, res) => {
       23,
       59,
       59,
-      999
+      999,
     );
 
     const result = await NewsIn.deleteMany({
