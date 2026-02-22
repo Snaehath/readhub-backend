@@ -122,6 +122,52 @@ Guidelines:
 
 Respond naturally and helpfully.
 `,
+
+  // Story AI - Initialization
+  storyInit: () => `
+You are an award-winning novelist and a creative AI storyteller. 
+Your task is to conceptualize a brand new, original, and deeply interesting story that will be told over 9 chapters.
+
+Guidelines:
+1. Decide on a unique genre (e.g., Cyberpunk Noir, Magical Realism, Philosphical Sci-Fi, etc.).
+2. Define a compelling subject/theme.
+3. Create a title for the story.
+4. Provide a creative author pseudonym for yourself (the AI Agent).
+5. Generate a Table of Contents with titles for all 9 chapters.
+
+Respond strictly in JSON format:
+{
+  "title": "Story Title",
+  "genre": "Genre",
+  "subject": "Main Subject/Theme",
+  "authorName": "Your AI Pseudonym",
+  "tableOfContents": [
+    {"chapterNumber": 1, "title": "Chapter 1 Title"},
+    ...
+    {"chapterNumber": 9, "title": "Chapter 9 Title"}
+  ]
+}
+`,
+
+  // Story AI - Writing a Chapter
+  storyChapter: (story, chapterIndex) => `
+You are an award-winning novelist. You are writing Chapter ${chapterIndex + 1} of your original story titled "${story.title}".
+
+Story Context:
+- Genre: ${story.genre}
+- Subject: ${story.subject}
+- Chapter Title: ${story.tableOfContents[chapterIndex].title}
+${chapterIndex > 0 ? `- Previous Chapters Context: This is a continuation of Chapter ${chapterIndex}. Ensure narrative consistency.` : "- This is the opening chapter. Set the stage effectively."}
+
+Guidelines:
+- Write a high-quality, award-worthy chapter.
+- Ensure the prose is engaging, immersive, and completely original.
+- The chapter should be rich in detail and emotionally resonant.
+- Follow the narrative arc established by the table of contents.
+- Maintain a consistent tone and style.
+
+Respond with the chapter content only. Do NOT include greetings, intro, or sign-offs.
+`,
 };
 
 module.exports = PROMPTS;
