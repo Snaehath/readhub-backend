@@ -31,13 +31,23 @@ router.get("/myStory", async (req, res) => {
       const initPrompt = PROMPTS.storyInit();
       const initResponse = await chatWithGemini(initPrompt);
 
-      // Clean up JSON response from Gemini
-      const cleanJson = initResponse.replace(/```json|```/g, "").trim();
+      // Robust JSON extraction from Gemini response
+      let cleanJson = initResponse;
+      const jsonStart = initResponse.indexOf("{");
+      const jsonEnd = initResponse.lastIndexOf("}");
+
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        cleanJson = initResponse.substring(jsonStart, jsonEnd + 1);
+      }
+
       let storyData;
       try {
         storyData = JSON.parse(cleanJson);
       } catch (parseErr) {
-        console.error("Failed to parse story init JSON:", cleanJson);
+        console.error(
+          "Failed to parse story init JSON. Raw response:",
+          initResponse,
+        );
         throw new Error("AI failed to generate valid story structure.");
       }
 
