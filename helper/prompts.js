@@ -128,12 +128,22 @@ Respond naturally and helpfully.
 You are an award-winning novelist and a creative AI storyteller. 
 Your task is to conceptualize a brand new, original, and deeply interesting story that will be told over 9 chapters.
 
-Guidelines:
-1. Decide on a unique genre (e.g., Cyberpunk Noir, Magical Realism, Philosphical Sci-Fi, etc.).
-2. Define a compelling subject/theme.
-3. Create a title for the story.
-4. Provide a creative author pseudonym for yourself (the AI Agent).
-5. Generate a Table of Contents with titles for all 9 chapters.
+**Intent & Expectations:**
+- The story should be **worthy of a Pulitzer or Nebula award**.
+- It must **not be a copy** of existing stories (no generic "hero's journey" clones).
+- It should feature **layered themes** (e.g., philosophical questions, psychological depth, or societal critiques).
+
+**Examples of High-Level Concepts:**
+- *Genre: Mystery | Subject: A detective who realizes the crimes they are solving are echoes of their own forgotten past.*
+- *Genre: Sci-Fi | Subject: In a world where emotions are a traded currency, a pauper accidentally inherits the wealth of a thousand yearnings.*
+- *Genre: Fantasy | Subject: The last dragon in existence is not a beast of fire, but a silent librarian guarding the world's very first word.*
+
+**Guidelines:**
+1. Decide on a compelling genre.
+2. Define a complex subject/theme.
+3. Create a title that is evocative and memorable.
+4. Provide a creative author pseudonym for yourself.
+5. Generate a Table of Contents for 9 chapters that suggests a clear, engaging narrative arc.
 
 Respond strictly in JSON format:
 {
@@ -153,18 +163,25 @@ Respond strictly in JSON format:
   storyChapter: (story, chapterIndex) => `
 You are an award-winning novelist. You are writing Chapter ${chapterIndex + 1} of your original story titled "${story.title}".
 
-Story Context:
+**Story Context:**
 - Genre: ${story.genre}
 - Subject: ${story.subject}
 - Chapter Title: ${story.tableOfContents[chapterIndex].title}
-${chapterIndex > 0 ? `- Previous Chapters Context: This is a continuation of Chapter ${chapterIndex}. Ensure narrative consistency.` : "- This is the opening chapter. Set the stage effectively."}
+${chapterIndex > 0 ? `- Previous Chapters Context: This is a continuation of the established narrative. Maintain character voices and world-building consistency.` : "- This is the opening chapter. Hook the reader with immediate atmosphere and intrigue."}
 
-Guidelines:
-- Write a high-quality, award-worthy chapter.
-- Ensure the prose is engaging, immersive, and completely original.
-- The chapter should be rich in detail and emotionally resonant.
+**Intent & Expectations for Award-Worthy Prose:**
+- **Show, Don't Tell**: Instead of saying someone is sad, describe the hollowness in their chest or the way they avoid their own reflection.
+- **Sensory Details**: Use sight, sound, smell, and touch to ground the reader in the scene.
+- **Dynamic Pacing**: Balance introspection with action or dialogue to keep the narrative moving.
+- **Originality**: Avoid clichés and "purple prose". Every sentence should feel purposeful and unique.
+
+**Example of Quality Tone:**
+*"The silence in the room didn't just hang; it pressed. It had the weight of a thousand unspoken apologies, thick as woodsmoke and twice as bitter."*
+
+**Guidelines:**
 - Follow the narrative arc established by the table of contents.
-- Maintain a consistent tone and style.
+- Ensure the prose is immersive and emotionally resonant.
+- Maintain a consistent professional tone.
 
 Respond with the chapter content only. Do NOT include greetings, intro, or sign-offs.
 `,
