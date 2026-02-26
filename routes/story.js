@@ -5,10 +5,7 @@ const { chatWithGemini } = require("../models/geminiClient");
 const { verifyToken } = require("../helper/authJwt");
 const PROMPTS = require("../helper/prompts");
 
-/**
- * GET /allStories
- * Returns a list of all COMPLETED stories generated on the platform.
- */
+// Get all completed stories
 router.get("/allStories", async (req, res) => {
   try {
     // Only show stories that are complete
@@ -25,6 +22,7 @@ router.get("/allStories", async (req, res) => {
         authorName: story.authorName,
         isCompleted: story.isCompleted,
         currentChapterCount: story.chapters.length,
+        rating: story.rating,
         index: story._id.toString(),
       })),
     });
@@ -36,15 +34,10 @@ router.get("/allStories", async (req, res) => {
   }
 });
 
-// Track users currently in the process of initializing a story to prevent concurrent creation
-const initializationLocks = new Set();
+// Track pending initializations to prevent concurrent creation and "join" existing requests
+const pendingInitializations = new Map();
 
-/**
- * GET /myStory
- * Fetches the user's current original story.
- * - If no story exists OR the current story is completed, it initializes a new one.
- * - If a story exists and matches the "new day" condition, it generates the next chapter.
- */
+// Get or initialize user's current story
 router.get("/myStory", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
@@ -59,25 +52,19 @@ router.get("/myStory", async (req, res) => {
   const userId = userData.userId;
 
   try {
-    // 1. Check if another request is already initializing for this user
-    if (initializationLocks.has(userId)) {
+    // 1. Check if a story is already being initialized for this user
+    if (pendingInitializations.has(userId)) {
       console.log(
-        `Initialization already in progress for user: ${userId}. Waiting...`,
+        `AGENT 1 (Initiator) is conceptualizing for user: ${userId}. Waiting...`,
       );
-      // Wait for a few seconds and try to find the story again (simple polling)
-      for (let i = 0; i < 10; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2s
-        const existingStory = await Story.findOne({
-          userId,
-          isCompleted: false,
+      const conceptualizedStory = await pendingInitializations.get(userId);
+      if (conceptualizedStory) {
+        return res.status(200).json({
+          message:
+            "Story conceptualized successfully. Your journey is beginning...",
+          story: formatStoryResponse(conceptualizedStory),
+          isInitializing: true,
         });
-        if (existingStory) {
-          return res.status(200).json({
-            message: "Story retrieved successfully",
-            story: formatStoryResponse(existingStory),
-          });
-        }
-        if (!initializationLocks.has(userId)) break; // Lock released
       }
     }
 
@@ -87,16 +74,12 @@ router.get("/myStory", async (req, res) => {
       isCompleted: false,
     });
 
-    // 3. Initialize Story if no active story exists
+    // 3. PHASE 1: The Initiator Agent
+    // Responsible ONLY for conceptualizing the story title, genre, subject, and table of contents.
     if (!story) {
-      // Acquire lock
-      initializationLocks.add(userId);
+      const initProcess = (async () => {
+        console.log("AGENT 1: Conceptualizing a new epic for user:", userId);
 
-      try {
-        console.log(
-          "No active story found. Initializing new story for user:",
-          userId,
-        );
         const initPrompt = PROMPTS.storyInit();
         const initResponse = await chatWithGemini(initPrompt);
 
@@ -111,67 +94,82 @@ router.get("/myStory", async (req, res) => {
         try {
           storyData = JSON.parse(cleanJson);
         } catch (parseErr) {
-          throw new Error("AI failed to generate valid story structure.");
+          throw new Error("AI failed to generate a valid story concept.");
         }
 
-        story = new Story({
+        const newStory = new Story({
           userId,
           title: storyData.title,
           genre: storyData.genre,
           subject: storyData.subject,
           authorName: storyData.authorName,
           tableOfContents: storyData.tableOfContents,
-          chapters: [],
+          chapters: [], // Start with an empty shell
         });
 
-        // Generate first chapter immediately
-        const chapterPrompt = PROMPTS.storyChapter(story, 0);
+        await newStory.save();
+        console.log(
+          "AGENT 1: Story conceptualized successfully:",
+          newStory.title,
+        );
+        return newStory;
+      })();
+
+      pendingInitializations.set(userId, initProcess);
+
+      try {
+        story = await initProcess;
+        // REDUCING STRAIN: We return the shell immediately after Phase 1.
+        // Agent 2 (The Writer) will take over on the very next request.
+        return res.status(201).json({
+          message:
+            "Story conceptualized! Taking a moment to prepare the first chapter...",
+          story: formatStoryResponse(story),
+          isInitializing: true,
+        });
+      } finally {
+        pendingInitializations.delete(userId);
+      }
+    }
+
+    // 4. PHASE 2: The Writing Agent
+    // Responsible for writing the actual chapters, one day at a time.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const lastChapter = story.chapters[story.chapters.length - 1];
+    const lastPublishedDate = lastChapter
+      ? new Date(lastChapter.publishedAt)
+      : null;
+    if (lastPublishedDate) lastPublishedDate.setHours(0, 0, 0, 0);
+
+    // If no chapters yet (brand new shell) OR if it's a new day
+    if (!lastPublishedDate || lastPublishedDate < today) {
+      if (story.chapters.length < story.maxChapters) {
+        const nextIndex = story.chapters.length;
+        console.log(
+          `AGENT 2 (Writer): Writing Chapter ${nextIndex + 1} for: ${story.title}`,
+        );
+
+        const chapterPrompt = PROMPTS.storyChapter(story, nextIndex);
         const chapterContent = await chatWithGemini(chapterPrompt);
 
+        if (!chapterContent || chapterContent.trim() === "") {
+          throw new Error("Writer Agent failed to produce content.");
+        }
+
         story.chapters.push({
-          chapterNumber: 1,
-          title: story.tableOfContents[0].title,
+          chapterNumber: nextIndex + 1,
+          title: story.tableOfContents[nextIndex].title,
           content: chapterContent,
           publishedAt: new Date(),
         });
 
-        await story.save();
-      } finally {
-        // Release lock
-        initializationLocks.delete(userId);
-      }
-    } else {
-      // 4. Logic to generate next chapter if it's a new day
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const lastChapter = story.chapters[story.chapters.length - 1];
-      const lastPublishedDate = lastChapter
-        ? new Date(lastChapter.publishedAt)
-        : null;
-      if (lastPublishedDate) lastPublishedDate.setHours(0, 0, 0, 0);
-
-      if (!lastPublishedDate || lastPublishedDate < today) {
-        if (story.chapters.length < story.maxChapters) {
-          const nextIndex = story.chapters.length;
-          console.log(
-            `Generating chapter ${nextIndex + 1} for story: ${story.title}`,
-          );
-          const chapterPrompt = PROMPTS.storyChapter(story, nextIndex);
-          const chapterContent = await chatWithGemini(chapterPrompt);
-
-          story.chapters.push({
-            chapterNumber: nextIndex + 1,
-            title: story.tableOfContents[nextIndex].title,
-            content: chapterContent,
-            publishedAt: new Date(),
-          });
-
-          if (story.chapters.length === story.maxChapters) {
-            story.isCompleted = true;
-          }
-          await story.save();
+        if (story.chapters.length === story.maxChapters) {
+          story.isCompleted = true;
         }
+        await story.save();
+        console.log(`AGENT 2: Chapter ${nextIndex + 1} published.`);
       }
     }
 
@@ -201,14 +199,66 @@ function formatStoryResponse(story) {
     isCompleted: story.isCompleted,
     currentChapterCount: story.chapters.length,
     maxChapters: story.maxChapters,
+    rating: story.rating,
+    review: story.review,
   };
 }
 
-/**
- * GET /:id
- * Returns the FULL details of a specific story by its ID (for the archive).
- * Positioned at the bottom to avoid shadowing specific routes like /myStory or /allStories.
- */
+// Update story rating and review
+router.patch("/:id/review", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+  const userData = verifyToken(token);
+
+  if (!userData) {
+    return res
+      .status(401)
+      .json({ message: "Unauthorized: Invalid or missing token" });
+  }
+
+  const { rating, review } = req.body;
+
+  if (
+    rating !== undefined &&
+    (typeof rating !== "number" || rating < 1 || rating > 5)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "Rating must be a number between 1 and 5." });
+  }
+
+  try {
+    const story = await Story.findById(req.params.id);
+
+    if (!story) {
+      return res.status(404).json({ error: "Story not found." });
+    }
+
+    // Ensure the user owns the story
+    if (story.userId.toString() !== userData.userId) {
+      return res
+        .status(403)
+        .json({ error: "Unauthorized: You can only review your own stories." });
+    }
+
+    if (rating !== undefined) story.rating = rating;
+    if (review !== undefined) story.review = review;
+
+    await story.save();
+
+    res.status(200).json({
+      message: "Feedback submitted successfully",
+      story: formatStoryResponse(story),
+    });
+  } catch (err) {
+    console.error("Error updating story review:", err);
+    res
+      .status(500)
+      .json({ error: "Internal server error while updating your review." });
+  }
+});
+
+// Get story details by ID
 router.get("/:id", async (req, res) => {
   try {
     const story = await Story.findById(req.params.id);

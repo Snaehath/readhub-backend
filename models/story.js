@@ -27,6 +27,8 @@ const StorySchema = new mongoose.Schema(
     ],
     maxChapters: { type: Number, default: 9 },
     isCompleted: { type: Boolean, default: false },
+    rating: { type: Number, min: 1, max: 5 },
+    review: { type: String },
   },
   { timestamps: true },
 );
