@@ -8,10 +8,8 @@ const PROMPTS = require("../helper/prompts");
 // Get all completed stories
 router.get("/allStories", async (req, res) => {
   try {
-    // Only show stories that are complete
-    const stories = await Story.find({ isCompleted: true }).sort({
-      updatedAt: -1,
-    });
+    // Show all stories (completed and ongoing)
+    const stories = await Story.find({}).sort({ createdAt: -1 });
     res.status(200).json({
       message: "All completed stories retrieved successfully",
       stories: stories.map((story) => ({
@@ -38,47 +36,47 @@ router.get("/allStories", async (req, res) => {
 const pendingInitializations = new Map();
 
 // Get or initialize user's current story
+// Get current active story or initialize a new global one
 router.get("/myStory", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
 
+  // Note: We still require a token for context, but the story discovery is global
   if (!userData) {
     return res
       .status(401)
       .json({ message: "Unauthorized: Invalid or missing token" });
   }
 
-  const userId = userData.userId;
+  const GLOBAL_LOCK_KEY = "GLOBAL_STORY_INIT";
 
   try {
-    // 1. Check if a story is already being initialized for this user
-    if (pendingInitializations.has(userId)) {
+    // 1. Check if the Initiator Agent is already building a story
+    if (pendingInitializations.has(GLOBAL_LOCK_KEY)) {
       console.log(
-        `AGENT 1 (Initiator) is conceptualizing for user: ${userId}. Waiting...`,
+        "AGENT 1 (Initiator) is conceptualizing a global story. Joining...",
       );
-      const conceptualizedStory = await pendingInitializations.get(userId);
+      const conceptualizedStory =
+        await pendingInitializations.get(GLOBAL_LOCK_KEY);
       if (conceptualizedStory) {
         return res.status(200).json({
-          message:
-            "Story conceptualized successfully. Your journey is beginning...",
+          message: "A new epic is being born... Joining existing session.",
           story: formatStoryResponse(conceptualizedStory),
           isInitializing: true,
         });
       }
     }
 
-    // 2. Look for an active (non-completed) story for this user
-    let story = await Story.findOne({
-      userId,
-      isCompleted: false,
+    // 2. Look for the current global active (non-completed) story
+    let story = await Story.findOne({ isCompleted: false }).sort({
+      createdAt: -1,
     });
 
     // 3. PHASE 1: The Initiator Agent
-    // Responsible ONLY for conceptualizing the story title, genre, subject, and table of contents.
     if (!story) {
       const initProcess = (async () => {
-        console.log("AGENT 1: Conceptualizing a new epic for user:", userId);
+        console.log("AGENT 1: Initializing a new global epic...");
 
         const initPrompt = PROMPTS.storyInit();
         const initResponse = await chatWithGemini(initPrompt);
@@ -94,46 +92,40 @@ router.get("/myStory", async (req, res) => {
         try {
           storyData = JSON.parse(cleanJson);
         } catch (parseErr) {
-          throw new Error("AI failed to generate a valid story concept.");
+          throw new Error(
+            "AI failed to generate a valid global story concept.",
+          );
         }
 
         const newStory = new Story({
-          userId,
+          userId: userData.userId, // Storing the discoverer's ID for history
           title: storyData.title,
           genre: storyData.genre,
           subject: storyData.subject,
           authorName: storyData.authorName,
           tableOfContents: storyData.tableOfContents,
-          chapters: [], // Start with an empty shell
+          chapters: [],
         });
 
         await newStory.save();
-        console.log(
-          "AGENT 1: Story conceptualized successfully:",
-          newStory.title,
-        );
         return newStory;
       })();
 
-      pendingInitializations.set(userId, initProcess);
+      pendingInitializations.set(GLOBAL_LOCK_KEY, initProcess);
 
       try {
         story = await initProcess;
-        // REDUCING STRAIN: We return the shell immediately after Phase 1.
-        // Agent 2 (The Writer) will take over on the very next request.
         return res.status(201).json({
-          message:
-            "Story conceptualized! Taking a moment to prepare the first chapter...",
+          message: "New global story initialized!",
           story: formatStoryResponse(story),
           isInitializing: true,
         });
       } finally {
-        pendingInitializations.delete(userId);
+        pendingInitializations.delete(GLOBAL_LOCK_KEY);
       }
     }
 
     // 4. PHASE 2: The Writing Agent
-    // Responsible for writing the actual chapters, one day at a time.
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -143,38 +135,35 @@ router.get("/myStory", async (req, res) => {
       : null;
     if (lastPublishedDate) lastPublishedDate.setHours(0, 0, 0, 0);
 
-    // If no chapters yet (brand new shell) OR if it's a new day
+    // Global daily progression
     if (!lastPublishedDate || lastPublishedDate < today) {
       if (story.chapters.length < story.maxChapters) {
-        const nextIndex = story.chapters.length;
-        console.log(
-          `AGENT 2 (Writer): Writing Chapter ${nextIndex + 1} for: ${story.title}`,
-        );
+        console.log(`AGENT 2 (Writer): Advancing global story: ${story.title}`);
 
-        const chapterPrompt = PROMPTS.storyChapter(story, nextIndex);
+        const chapterPrompt = PROMPTS.storyChapter(
+          story,
+          story.chapters.length,
+        );
         const chapterContent = await chatWithGemini(chapterPrompt);
 
-        if (!chapterContent || chapterContent.trim() === "") {
-          throw new Error("Writer Agent failed to produce content.");
-        }
+        if (chapterContent && chapterContent.trim() !== "") {
+          story.chapters.push({
+            chapterNumber: story.chapters.length + 1,
+            title: story.tableOfContents[story.chapters.length].title,
+            content: chapterContent,
+            publishedAt: new Date(),
+          });
 
-        story.chapters.push({
-          chapterNumber: nextIndex + 1,
-          title: story.tableOfContents[nextIndex].title,
-          content: chapterContent,
-          publishedAt: new Date(),
-        });
-
-        if (story.chapters.length === story.maxChapters) {
-          story.isCompleted = true;
+          if (story.chapters.length === story.maxChapters) {
+            story.isCompleted = true;
+          }
+          await story.save();
         }
-        await story.save();
-        console.log(`AGENT 2: Chapter ${nextIndex + 1} published.`);
       }
     }
 
     res.status(200).json({
-      message: "Story retrieved successfully",
+      message: "Current active story retrieved",
       story: formatStoryResponse(story),
     });
   } catch (err) {
@@ -234,12 +223,7 @@ router.patch("/:id/review", async (req, res) => {
       return res.status(404).json({ error: "Story not found." });
     }
 
-    // Ensure the user owns the story
-    if (story.userId.toString() !== userData.userId) {
-      return res
-        .status(403)
-        .json({ error: "Unauthorized: You can only review your own stories." });
-    }
+    // Allow any authenticated user to review the global story
 
     if (rating !== undefined) story.rating = rating;
     if (review !== undefined) story.review = review;
