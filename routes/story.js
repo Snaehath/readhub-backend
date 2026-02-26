@@ -11,19 +11,8 @@ router.get("/allStories", async (req, res) => {
     // Show all stories (completed and ongoing)
     const stories = await Story.find({}).sort({ createdAt: -1 });
     res.status(200).json({
-      message: "All completed stories retrieved successfully",
-      stories: stories.map((story) => ({
-        id: story._id,
-        title: story.title,
-        genre: story.genre,
-        subject: story.subject,
-        authorName: story.authorName,
-        isCompleted: story.isCompleted,
-        currentChapterCount: story.chapters.length,
-        rating: story.averageRating,
-        reviewCount: story.reviews.length,
-        index: story._id.toString(),
-      })),
+      message: "All stories retrieved successfully",
+      stories: stories.map((story) => formatStorySummary(story)),
     });
   } catch (err) {
     console.error("Error fetching all stories:", err);
@@ -33,10 +22,9 @@ router.get("/allStories", async (req, res) => {
   }
 });
 
-// Track pending initializations to prevent concurrent creation and "join" existing requests
+// Track pending initializations to prevent concurrent creation
 const pendingInitializations = new Map();
 
-// Get or initialize user's current story
 // Get current active story or initialize a new global one
 router.get("/myStory", async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -63,7 +51,7 @@ router.get("/myStory", async (req, res) => {
       if (conceptualizedStory) {
         return res.status(200).json({
           message: "A new epic is being born... Joining existing session.",
-          story: formatStoryResponse(conceptualizedStory),
+          story: formatStorySummary(conceptualizedStory),
           isInitializing: true,
         });
       }
@@ -118,7 +106,7 @@ router.get("/myStory", async (req, res) => {
         story = await initProcess;
         return res.status(201).json({
           message: "New global story initialized!",
-          story: formatStoryResponse(story),
+          story: formatStorySummary(story),
           isInitializing: true,
         });
       } finally {
@@ -165,7 +153,7 @@ router.get("/myStory", async (req, res) => {
 
     res.status(200).json({
       message: "Current active story retrieved",
-      story: formatStoryResponse(story),
+      story: formatStorySummary(story),
     });
   } catch (err) {
     console.error("Story Route Error:", err);
@@ -175,8 +163,8 @@ router.get("/myStory", async (req, res) => {
   }
 });
 
-// Helper to format the story response consistently
-function formatStoryResponse(story) {
+// Helper to format a slim version of the story (No chapter content)
+function formatStorySummary(story) {
   return {
     id: story._id,
     title: story.title,
@@ -184,13 +172,21 @@ function formatStoryResponse(story) {
     subject: story.subject,
     authorName: story.authorName,
     index: story._id.toString(),
-    tableOfContents: story.tableOfContents,
-    chapters: story.chapters,
     isCompleted: story.isCompleted,
     currentChapterCount: story.chapters.length,
     maxChapters: story.maxChapters,
-    reviews: story.reviews,
     averageRating: story.averageRating,
+    reviewCount: story.reviews.length,
+  };
+}
+
+// Helper to format the story response with FULL content
+function formatStoryResponse(story) {
+  return {
+    ...formatStorySummary(story),
+    tableOfContents: story.tableOfContents,
+    chapters: story.chapters,
+    reviews: story.reviews,
   };
 }
 

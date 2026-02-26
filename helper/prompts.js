@@ -125,33 +125,34 @@ Respond naturally and helpfully.
 
   // Story AI - Initialization
   storyInit: () => `
-You are a master of Mythological Sci-Fi, High Fantasy, and Monumental Adventure. 
-Your task is to conceptualize a brand new, original, and deeply interesting story that will be told over 9 chapters.
+You are a master of cinematic storytelling, specializing in high-concept masterpieces and monumental epics like **"Godzilla"**, **"Monarch: Legacy of Monsters"**, **"Dune"**, and **"Alien"**. 
+Your task is to conceptualize a brand-new, original story with **monumental scale** and **titanic forces**, drawing inspiration from modern epics and ancient mythologies (**Norse, Greek, Egyptian, etc.**).
 
 **Intent & Expectations:**
-- The story should feel like a **Modern or Epic Myth**—combining High-Tech, Ancient Magic, or Monumental Fantasy.
-- **Cross-Genre Freedom**: A single story can (and should) be a blend of multiple genres (e.g., High Fantasy x Sci-Fi x Survival).
-- Think **"Monarch: Legacy of Monsters"**, **"Dune"**, **"Godzilla"**, or **"Lord of the Rings"**—massive scale, global stakes, and titanic forces.
-- Use **aggressive, attractive titles** that promise mystery, power, and high-octane adventure.
-- Feel free to blend **ancient sorcery**, **futuristic tech**, **eldritch gods**, or **primordial titans**.
+- **Tone**: Cinematic, atmospheric, and high-octane. Think "Modern Myth" where the stakes are global, cosmic, or divine.
+- **Genre Limit**: You must use a maximum of **two** genre combinations (e.g., "Mythic Fantasy" or "Sci-Fi Horror"). Keep it concise.
+- **Masterpiece Focus**:
+  - **Sci-Fi & Fantasy**: Colossal entities, ancient guardians, or reality-warping technology.
+  - **Mythology**: Reimagined legends—Norse Gods in a dying universe, Greek Titans returning to the modern world, or Egyptian deities ruling the stars.
+  - **Horror/Mystery**: Eldritch scale and world-altering secrets (e.g., *The Deepest Silence*).
+- **Aggressive Titles**: Use bold, cinematic, and irresistible titles that promise power and mystery.
 
-**Examples of High-Level Concepts (Cross-Genre):**
-- *Genre: Mythic Sci-Fi x Psychological Thriller | Title: Project Leviathan: The Deepest Signal | Subject: A secret research base discovers that the Earth's core is a hibernating beast.*
-- *Genre: High Fantasy x Cosmic Adventure | Title: The Shards of Aetheria | Subject: The moon is actually a dormant celestial god, and its awakening is tearing the magical weave of the world apart.*
-- *Genre: Tech-Fantasy x Noir Mystery | Title: Monarchs of the Neon Void | Subject: Cyberpunk detective hunting the digital ghost of an ancient king.*
-- *Genre: Survival Adventure x Dark Fantasy | Title: The Titan's Maw | Subject: An army must cross the living, breathing landscape of a fallen god to reach the last bastion of humanity.*
+**Examples of Level Concepts:**
+- *Genre: Mythic Sci-Fi | Title: Ragnarok Protocol | Subject: In a dying galaxy, a technician discovers that the 'Black Hole' at the center is actually a trapped and awakening Jörmungandr.*
+- *Genre: Dark Fantasy | Title: The Titan's Maw | Subject: A modern-day archeologist accidentally breaks the seal on Tartarus, hidden beneath a major metropolis.*
+- *Genre: Sci-Fi Horror | Title: Project Leviathan | Subject: A deep-sea research team realizes the tectonic plates aren't moving; something ancient and hungry is waking up.*
+- *Genre: Fantasy Mystery | Title: The Sands of Ra | Subject: A nomad discovers that the pyramids are actually ancient star-gates, and the 'gods' have just sent a signal to return.*
 
 **Guidelines:**
-1. Decide on a compelling blend of genres (e.g., High Fantasy x Adventure x Sci-Fi).
-2. Define a subject with **Monumental Scale** (Titans, Gods, Celestial threats).
+1. Choose exactly one or two primary genres.
+2. Define a subject with **Monumental Scale** (Titans, Gods, Evil geniuses, or Colossal creatures).
 3. Create a title that is **bold, cinematic, and irresistible**.
-4. Provide a creative author pseudonym.
-5. Generate a Table of Contents for 9 chapters that builds tension from "The Omen" to a "World-Shattering Conclusion."
+4. Generate a Table of Contents for 9 chapters that builds tension from "The Omen" to a "Total World-Shattering Conclusion."
 
 Respond strictly in JSON format:
 {
   "title": "Story Title",
-  "genre": "Genre Blend (e.g., High Fantasy x Adventure)",
+  "genre": "Max two genres (e.g., Mythic Fantasy)",
   "subject": "Main Subject/Theme",
   "authorName": "Your AI Pseudonym",
   "tableOfContents": [
