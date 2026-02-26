@@ -20,7 +20,8 @@ router.get("/allStories", async (req, res) => {
         authorName: story.authorName,
         isCompleted: story.isCompleted,
         currentChapterCount: story.chapters.length,
-        rating: story.rating,
+        rating: story.averageRating,
+        reviewCount: story.reviews.length,
         index: story._id.toString(),
       })),
     });
@@ -188,8 +189,8 @@ function formatStoryResponse(story) {
     isCompleted: story.isCompleted,
     currentChapterCount: story.chapters.length,
     maxChapters: story.maxChapters,
-    rating: story.rating,
-    review: story.review,
+    reviews: story.reviews,
+    averageRating: story.averageRating,
   };
 }
 
@@ -223,10 +224,13 @@ router.patch("/:id/review", async (req, res) => {
       return res.status(404).json({ error: "Story not found." });
     }
 
-    // Allow any authenticated user to review the global story
-
-    if (rating !== undefined) story.rating = rating;
-    if (review !== undefined) story.review = review;
+    // Add the new review to the array
+    story.reviews.push({
+      userId: userData.userId,
+      rating: rating,
+      review: review,
+      createdAt: new Date(),
+    });
 
     await story.save();
 
