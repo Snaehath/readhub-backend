@@ -124,21 +124,30 @@ router.get("/myStory", async (req, res) => {
       : null;
     if (lastPublishedDate) lastPublishedDate.setHours(0, 0, 0, 0);
 
-    // Global daily progression
-    if (!lastPublishedDate || lastPublishedDate < today) {
-      if (story.chapters.length < story.maxChapters) {
-        console.log(`AGENT 2 (Writer): Advancing global story: ${story.title}`);
+    // Global daily progression (Admin bypass allowed)
+    const isAdminForce =
+      req.query.force === "true" && userData.role === "admin";
 
-        const chapterPrompt = PROMPTS.storyChapter(
-          story,
-          story.chapters.length,
-        );
+    if (!lastPublishedDate || lastPublishedDate < today || isAdminForce) {
+      if (story.chapters.length < story.maxChapters) {
+        if (isAdminForce) {
+          console.log(
+            `AGENT 2: Admin ${userData.email} forced progress on story: ${story.title}`,
+          );
+        } else {
+          console.log(
+            `AGENT 2 (Writer): Advancing global story: ${story.title}`,
+          );
+        }
+
+        const nextIndex = story.chapters.length;
+        const chapterPrompt = PROMPTS.storyChapter(story, nextIndex);
         const chapterContent = await chatWithGemini(chapterPrompt);
 
         if (chapterContent && chapterContent.trim() !== "") {
           story.chapters.push({
-            chapterNumber: story.chapters.length + 1,
-            title: story.tableOfContents[story.chapters.length].title,
+            chapterNumber: nextIndex + 1,
+            title: story.tableOfContents[nextIndex].title,
             content: chapterContent,
             publishedAt: new Date(),
           });

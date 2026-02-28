@@ -41,6 +41,7 @@ router.post("/addUser", async (req, res) => {
         email: newUser.email,
         username: newUser.username,
         avatar: newUser.avatar,
+        role: newUser.role,
       },
     });
   } catch (err) {
@@ -77,6 +78,7 @@ router.post("/login", async (req, res) => {
       {
         userId: user._id,
         email: user.email,
+        role: user.role,
       },
       JWT_SECRET,
       { expiresIn: "1d" },
@@ -91,6 +93,7 @@ router.post("/login", async (req, res) => {
         email: user.email,
         username: user.username,
         avatar: user.avatar,
+        role: user.role,
         createdAt: user.createdAt,
       },
     });
@@ -115,7 +118,7 @@ router.put("/update", async (req, res) => {
       return res.status(404).json({ error: "User not found." });
     }
 
-    // Update user properties
+    // Update user properties (Role is Restricted - Admin only via DB)
     if (username !== undefined) user.username = username;
     if (avatar !== undefined) user.avatar = avatar;
 
@@ -127,10 +130,47 @@ router.put("/update", async (req, res) => {
         email: user.email,
         username: user.username,
         avatar: user.avatar,
+        role: user.role,
       },
     });
   } catch (err) {
     console.error("Error updating user:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Admin-Only: Change any user's role
+router.patch("/update-role", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+  const userData = require("../helper/authJwt").verifyToken(token);
+
+  if (!userData || userData.role !== "admin") {
+    return res.status(403).json({ error: "Unauthorized: Admins only." });
+  }
+
+  const { targetUserId, newRole } = req.body;
+
+  if (!["user", "admin"].includes(newRole)) {
+    return res.status(400).json({ error: "Invalid role specified." });
+  }
+
+  try {
+    const user = await User.findById(targetUserId);
+    if (!user) {
+      return res.status(404).json({ error: "Target user not found." });
+    }
+
+    user.role = newRole;
+    await user.save();
+
+    res.status(200).json({
+      message: `Role updated for ${user.username}`,
+      userId: user._id,
+      newRole: user.role,
+    });
+  } catch (err) {
+    console.error("Error updating role:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
