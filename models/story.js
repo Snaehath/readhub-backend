@@ -10,6 +10,7 @@ const StorySchema = new mongoose.Schema(
     genre: { type: String, required: true },
     subject: { type: String, required: true },
     authorName: { type: String, required: true },
+    coverImage: { type: String, default: "" },
     tableOfContents: [
       {
         chapterNumber: { type: Number, required: true },

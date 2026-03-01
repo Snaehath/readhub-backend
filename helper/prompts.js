@@ -189,6 +189,27 @@ ${chapterIndex > 0 ? `- Previous Chapters Context: This is a continuation of you
 
 Respond with the chapter content only. Do NOT include greetings, intro, or sign-offs.
 `,
+
+  // Story AI - Generate Image Prompt for Cover
+  storyCoverPrompt: (story) => `
+You are an expert Art Director. 
+Your task is to create a highly detailed, one-paragraph visual prompt for an AI image generator (Stable Diffusion). 
+This prompt will be used to create the cover art for the story: "${story.title}".
+
+**Story Details:**
+- Genre: ${story.genre}
+- Subject: ${story.subject}
+
+**Guidelines for the Art Prompt:**
+- Focus on the main theme and atmosphere.
+- Include specific artistic styles (e.g., oil painting, digital art, cinematic lighting).
+- Mention color palettes (e.g., "dominated by deep teals and warm gold").
+- Add technical keywords for quality: "highly detailed, 8k resolution, masterpiece, intricate textures".
+- DO NOT include any text, words, or letters in the image.
+- Avoid mentioning "cover" or "book" in the visual description.
+
+Respond with the visual prompt only. Do NOT include greetings, intro, or sign-offs.
+`,
 };
 
 module.exports = PROMPTS;

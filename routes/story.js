@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const Story = require("../models/story");
-const { chatWithGemini } = require("../models/geminiClient");
+const { askAI } = require("../models/aiService");
+const { generateStoryCover } = require("../models/forgeClient");
 const { verifyToken } = require("../helper/authJwt");
 const PROMPTS = require("../helper/prompts");
 
@@ -68,7 +69,7 @@ router.get("/myStory", async (req, res) => {
         console.log("AGENT 1: Initializing a new global epic...");
 
         const initPrompt = PROMPTS.storyInit();
-        const initResponse = await chatWithGemini(initPrompt);
+        const initResponse = await askAI(initPrompt);
 
         let cleanJson = initResponse;
         const jsonStart = initResponse.indexOf("{");
@@ -94,9 +95,24 @@ router.get("/myStory", async (req, res) => {
           authorName: storyData.authorName,
           tableOfContents: storyData.tableOfContents,
           chapters: [],
+          coverImage: "", // Temp
         });
 
         await newStory.save();
+
+        // PHASE 1.5: The Artist Agent (Generate Cover)
+        try {
+          const imagePrompt = PROMPTS.storyCoverPrompt(newStory);
+          const visualIdea = await askAI(imagePrompt);
+          const coverPath = await generateStoryCover(visualIdea, newStory._id);
+          if (coverPath) {
+            newStory.coverImage = coverPath;
+            await newStory.save();
+          }
+        } catch (imgErr) {
+          console.error("Warning: Cover generation failed.", imgErr);
+        }
+
         return newStory;
       })();
 
@@ -142,7 +158,13 @@ router.get("/myStory", async (req, res) => {
 
         const nextIndex = story.chapters.length;
         const chapterPrompt = PROMPTS.storyChapter(story, nextIndex);
-        const chapterContent = await chatWithGemini(chapterPrompt);
+        console.log(
+          `--- [AI WRITING START] --- Chapter ${nextIndex + 1}: ${story.tableOfContents[nextIndex].title}`,
+        );
+        const chapterContent = await askAI(chapterPrompt);
+        console.log(
+          `--- [AI WRITING FINISH] --- Chapter ${nextIndex + 1} complete.`,
+        );
 
         if (chapterContent && chapterContent.trim() !== "") {
           story.chapters.push({
@@ -180,6 +202,9 @@ function formatStorySummary(story) {
     genre: story.genre,
     subject: story.subject,
     authorName: story.authorName,
+    coverImage: story.coverImage
+      ? `http://localhost:5000${story.coverImage}`
+      : "https://via.placeholder.com/512x768?text=Generating+Art...",
     index: story._id.toString(),
     isCompleted: story.isCompleted,
     currentChapterCount: story.chapters.length,
@@ -248,6 +273,37 @@ router.patch("/:id/review", async (req, res) => {
     res
       .status(500)
       .json({ error: "Internal server error while updating your review." });
+  }
+});
+
+// Manually regenerate cover image for a story (Admin or Owner)
+router.post("/:id/regenerate-cover", async (req, res) => {
+  try {
+    const story = await Story.findById(req.params.id);
+    if (!story) return res.status(404).json({ message: "Story not found" });
+
+    console.log(`[MANUAL] Regenerating cover for story: ${story.title}`);
+
+    // PHASE 1: Generate Art Prompt
+    const imagePrompt = PROMPTS.storyCoverPrompt(story);
+    const visualIdea = await askAI(imagePrompt);
+
+    // PHASE 2: Generate and Save Image
+    const coverPath = await generateStoryCover(visualIdea, story._id);
+
+    if (coverPath) {
+      story.coverImage = coverPath;
+      await story.save();
+      return res.status(200).json({
+        message: "Cover regenerated successfully",
+        coverImage: `http://localhost:5000${coverPath}`,
+      });
+    }
+
+    res.status(500).json({ error: "Failed to generate cover image" });
+  } catch (err) {
+    console.error("Manual Cover Gen Error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

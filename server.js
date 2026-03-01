@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const axios = require("axios");
 const mongoose = require("mongoose");
 const cors = require("cors");
 
@@ -12,12 +13,36 @@ const storyRoutes = require("./routes/story");
 const app = express();
 app.use(cors());
 app.use(express.json());
+const path = require("path");
+app.use(express.static(path.join(__dirname, "public")));
 
 const mongodbURI = process.env.MONGO_URI;
 
 mongoose
   .connect(mongodbURI)
-  .then(() => console.log("MongoDB connected"))
+  .then(async () => {
+    console.log("✅ MongoDB connected");
+
+    // Check Local SLM (Ollama)
+    if (process.env.AI_MODE === "local") {
+      try {
+        await axios.get("http://localhost:11434/api/tags");
+        console.log("Local AI (Ollama) is ONLINE");
+      } catch (e) {
+        console.warn("Local AI (Ollama) is OFFLINE. Make sure it's running!");
+      }
+    }
+
+    // Check Local Image Gen (Forge)
+    try {
+      await axios.get("http://127.0.0.1:7860/sdapi/v1/options", {
+        timeout: 2000,
+      });
+      console.log("Image Gen AI (Forge) is ONLINE");
+    } catch (e) {
+      console.warn("Image Gen AI (Forge) is OFFLINE. (Check Stability Matrix)");
+    }
+  })
   .catch((err) => console.error("MongoDB connection error:", err));
 
 app.use("/api/news", newsRoutes);

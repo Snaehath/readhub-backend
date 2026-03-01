@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { chatWithGemini } = require("../models/geminiClient");
+const { askAI } = require("../models/aiService");
 const NewsUs = require("../models/news");
 const NewsIndia = require("../models/newsIn");
 const { Types } = require("mongoose");
@@ -92,7 +92,7 @@ async function handleMagazineSummary(collection) {
 
   const prompt = PROMPTS.magazineSummary(newsDigest);
 
-  return await chatWithGemini(prompt);
+  return await askAI(prompt);
 }
 
 // --- General News or Category-based News ---
@@ -114,7 +114,7 @@ async function handleGeneralNews({ category, collection, userMessage }) {
 
   const prompt = PROMPTS.generalNews(userMessage, context);
 
-  return await chatWithGemini(prompt);
+  return await askAI(prompt);
 }
 
 // --- Ask AI - Explaining the Particular News ---
@@ -155,7 +155,7 @@ const handleAskAi = async ({ id, country }) => {
     .join("\n\n");
 
   const prompt = PROMPTS.askAi(article, relatedContext);
-  return await chatWithGemini(prompt);
+  return await askAI(prompt);
 };
 
 // --- Future News ---
@@ -175,7 +175,7 @@ router.post("/futureNews", async (req, res) => {
 
     const prompt = PROMPTS.futureNews(article);
 
-    const futureArticle = await chatWithGemini(prompt);
+    const futureArticle = await askAI(prompt);
 
     return res.status(200).json({ futureArticle });
   } catch (error) {
@@ -236,7 +236,7 @@ router.post("/chat", async (req, res) => {
     } else {
       // Fallback if no specific intent
       const prompt = PROMPTS.fallback(userMessage);
-      reply = await chatWithGemini(prompt);
+      reply = await askAI(prompt);
     }
 
     res.json({ reply });
