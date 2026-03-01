@@ -21,7 +21,7 @@ const mongodbURI = process.env.MONGO_URI;
 mongoose
   .connect(mongodbURI)
   .then(async () => {
-    console.log("✅ MongoDB connected");
+    console.log("MongoDB connected");
 
     // Check Local SLM (Ollama)
     if (process.env.AI_MODE === "local") {

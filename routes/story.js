@@ -26,8 +26,8 @@ router.get("/allStories", async (req, res) => {
 // Track pending initializations to prevent concurrent creation
 const pendingInitializations = new Map();
 
-// Get current active story or initialize a new global one
-router.get("/myStory", async (req, res) => {
+// Trigger global story progression or initialization
+router.post("/myStory", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
@@ -88,14 +88,17 @@ router.get("/myStory", async (req, res) => {
         }
 
         const newStory = new Story({
-          userId: userData.userId, // Storing the discoverer's ID for history
+          userId: userData.userId,
           title: storyData.title,
           genre: storyData.genre,
           subject: storyData.subject,
+          synopsis: storyData.synopsis,
           authorName: storyData.authorName,
+          worldBuilding: storyData.worldBuilding,
+          characters: storyData.characters,
           tableOfContents: storyData.tableOfContents,
           chapters: [],
-          coverImage: "", // Temp
+          coverImage: "",
         });
 
         await newStory.save();
@@ -157,13 +160,23 @@ router.get("/myStory", async (req, res) => {
         }
 
         const nextIndex = story.chapters.length;
-        const chapterPrompt = PROMPTS.storyChapter(story, nextIndex);
+
+        // Build context from previous chapters (last 2 for continuity)
+        const recentChapters = story.chapters.slice(-2);
+        const context = recentChapters
+          .map(
+            (c) =>
+              `Chapter ${c.chapterNumber} (TITLE: ${c.title}):\n${c.content.substring(0, 500)}...`,
+          )
+          .join("\n\n");
+
         console.log(
-          `--- [AI WRITING START] --- Chapter ${nextIndex + 1}: ${story.tableOfContents[nextIndex].title}`,
+          `--- [THE SCRIBE START] --- Chapter ${nextIndex + 1}: ${story.tableOfContents[nextIndex].title}`,
         );
+        const chapterPrompt = PROMPTS.storyChapter(story, nextIndex, context);
         const chapterContent = await askAI(chapterPrompt);
         console.log(
-          `--- [AI WRITING FINISH] --- Chapter ${nextIndex + 1} complete.`,
+          `--- [THE SCRIBE FINISH] --- Chapter ${nextIndex + 1} complete.`,
         );
 
         if (chapterContent && chapterContent.trim() !== "") {
@@ -201,6 +214,7 @@ function formatStorySummary(story) {
     title: story.title,
     genre: story.genre,
     subject: story.subject,
+    synopsis: story.synopsis,
     authorName: story.authorName,
     coverImage: story.coverImage
       ? `http://localhost:5000${story.coverImage}`
@@ -218,6 +232,8 @@ function formatStorySummary(story) {
 function formatStoryResponse(story) {
   return {
     ...formatStorySummary(story),
+    worldBuilding: story.worldBuilding,
+    characters: story.characters,
     tableOfContents: story.tableOfContents,
     chapters: story.chapters,
     reviews: story.reviews,
