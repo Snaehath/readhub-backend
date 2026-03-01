@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const axios = require("axios");
 const Story = require("../models/story");
 const { askAI } = require("../models/aiService");
 const { generateStoryCover } = require("../models/forgeClient");
@@ -105,15 +106,24 @@ router.post("/myStory", async (req, res) => {
 
         // PHASE 1.5: The Artist Agent (Generate Cover)
         try {
+          // Pre-check if Forge is available to avoid long timeouts
+          await axios.get("http://127.0.0.1:7860/sdapi/v1/options", {
+            timeout: 2000,
+          });
+
+          console.log("[ARTIST] Forge is online. Crafting cover art...");
           const imagePrompt = PROMPTS.storyCoverPrompt(newStory);
           const visualIdea = await askAI(imagePrompt);
           const coverPath = await generateStoryCover(visualIdea, newStory._id);
+
           if (coverPath) {
             newStory.coverImage = coverPath;
             await newStory.save();
           }
         } catch (imgErr) {
-          console.error("Warning: Cover generation failed.", imgErr);
+          console.warn(
+            "[ARTIST] Forge is offline or unreachable. Skipping cover generation.",
+          );
         }
 
         return newStory;
