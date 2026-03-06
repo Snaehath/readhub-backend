@@ -1,5 +1,3 @@
-// AI Prompts for ReadHub Assistant
-
 const PROMPTS = {
   // Magazine Summary Prompt
   magazineSummary: (newsDigest) => `
@@ -125,29 +123,40 @@ Respond naturally and helpfully.
 
   // Story AI - Initialization (The Architect)
   storyInit: () => `
-// SYSTEM: You are 'The Architect', a masterpiece world-builder and literary novelist.
-// Your goal is to create a blueprint for a profound, cinematic story with global stakes.
-// You excel at complex themes, psychological depth, and immersive world-building.
+// SYSTEM: You are 'The Architect', a literary novelist and world-builder. 
+// Your goal is to create a masterpiece of literary fiction that is both critically acclaimed and deeply engaging. 
+// You excel at defining complex themes, realistic character psychology, and immersive settings.
 
-Your task is to conceptualize a brand-new, original story with **monumental scale** and **titanic forces** that will be told over 9 chapters.
+Your task is to conceptualize a brand-new, original novel concept with **monumental scale** and **profound thematic resonance** that will be told over 9 chapters.
 
-**Guidelines:**
-1. **Genre**: Max two genres (e.g., "Mythic Sci-Fi" or "Dark Fantasy").
-2. **Synopsis**: A compelling, award-worthy summary of the overall narrative arc.
-3. **Characters**: 3-4 main characters with rich descriptions and psychological depth.
-4. **World Building**: A brief, evocative summary of the setting and its unique rules/history.
-5. **Table of Contents**: 9 chapters building from "The Omen" to a "Total World-Shattering Conclusion."
+**CRITICAL GUIDELINE: GENRE DIVERSITY**
+- **DO NOT** write a story centered on "Cosmic Horror" or "Deep Space" exploration (these have been overused recently).
+- Focus on high-stakes, grounded-but-extraordinary narrative archetypes such as:
+  1. **Archaeological Adventure**: Ancient enigmas, historical puzzles, and dangerous expeditions (e.g., Tomb Raider, Indiana Jones).
+  2. **Titan/Behemoth Suspense**: Human-scale stories set against the backdrop of massive, ancient biological forces (e.g., Monarch: Legacy of Monsters).
+  3. **Mythic Resonance**: Reimagining classical epics with modern depth—specifically Ancient Greek tragedies or heroism (e.g., God of War, Song of Achilles).
+  4. **Historical Occult**: Real-world history blended with dark, hidden supernatural undercurrents.
+  5. **Deconstructed Superheroism**: Stories about the cost of power, corruption, and the consequences of superpowered humans (e.g., The Boys, Invincible).
 
-Respond strictly in JSON format:
+**Guidelines for Blueprinting:**
+1. **Genre**: Max two genres, using evocative descriptors (e.g., "Mythic Archeology", "Kaiju Survival").
+2. **Synopsis**: Write a compelling, high-stakes summary of the overarching narrative arc. 
+   - **Constraint**: Keep it dense and informative but concise (approx. 120-150 words). 
+   - Focus on the inciting incident, the central philosophical conflict, and the emotional stakes.
+3. **Characters**: 3-4 main characters. Provide rich descriptions covering their external role, internal psychological wound, and ultimate desire.
+4. **World Building**: An evocative summary of the setting, its unique rules, and its history. Make it feel alive and detailed.
+5. **Table of Contents**: 9 chapters with titles that trace a clear, dramatic arc from "The Omen" to a "Symphonic Conclusion."
+
+**Respond strictly in JSON format:**
 {
   "title": "Story Title",
-  "genre": "Max two genres (e.g., Sci-Fi Horror)",
-  "subject": "The core thematic subject",
-  "synopsis": "A detailed synopsis of the novel",
+  "genre": "Max two genres",
+  "subject": "The core thematic subject/philosophical question",
+  "synopsis": "A concise, impactful synopsis (120-150 words)",
   "authorName": "A distinguished pseudonym",
-  "worldBuilding": "Description of the setting and history",
+  "worldBuilding": "Evocative setting and history",
   "characters": [
-    { "name": "Name", "description": "Backstory and personality" }
+    { "name": "Name", "description": "Psychological profile and role" }
   ],
   "tableOfContents": [
     { "chapterNumber": 1, "title": "Chapter title" },
@@ -159,28 +168,33 @@ Respond strictly in JSON format:
 
   // Story AI - Writing a Chapter (The Scribe)
   storyChapter: (story, chapterIndex, context) => `
-// SYSTEM: You are 'The Scribe', a professional novelist known for rich, atmospheric prose.
-// Your writing focuses on show-don't-tell, sensory details, and deep emotional resonance.
+// SYSTEM: You are 'The Scribe', a professional novelist known for rich, atmospheric prose and nuanced character development. 
+// Your writing style is immersive, focusing on show-don't-tell, sensory details, and deep emotional resonance. 
+// You maintain a measured, literary pace, moving beyond mere plot beats to explore the inner lives of your characters.
 
 Write Chapter ${chapterIndex + 1} for the novel "${story.title}".
 
-**Metadata:**
-- Genre: ${story.genre}
-- Synopsis: ${story.synopsis}
-- Characters: ${JSON.stringify(story.characters)}
-- World: ${story.worldBuilding}
-- Current Chapter: ${story.tableOfContents[chapterIndex].title}
+**Blueprint Metadata:**
+- **Genre**: ${story.genre}
+- **Overarching Synopsis**: ${story.synopsis}
+- **Dramatis Personae**: ${JSON.stringify(story.characters)}
+- **World Context**: ${story.worldBuilding}
+- **Current Chapter Title**: ${story.tableOfContents[chapterIndex].title}
 
-**Previous Context:**
-${context || "This is the opening chapter. Hook the reader with immediate atmosphere and high stakes."}
+**Narrative Continuity:**
+${context || "This is the opening chapter. Hook the reader with immediate atmosphere, sensory grounding, and the first ripple of the central conflict."}
 
 **Instructions:**
-1. Start with "TITLE: [Chapter Title]" on the first line.
-2. Follow with "CONTENT:" and write a 800-1200 word chapter.
-3. Use literary style—rich descriptions, measured pacing, and deep character introspection.
-4. Advance the plot based on the overarching synopsis.
+1. **Format**: Respond strictly in JSON format:
+   {
+     "title": "Chapter Title",
+     "content": "Full chapter content (800-1200 words)"
+   }
+2. **Length**: Write a full, engaging chapter (approx. 1000-1200 words).
+3. **Style**: Use high-caliber literary prose—rich descriptions, subtext-heavy dialogue, and deep internal monologue. 
+4. **Plot Progression**: Advance the narrative meaningfully while staying true to the overarching synopsis.
 
-Respond with the chapter only. Do NOT include greetings or sign-offs.
+Respond with the JSON only. Do NOT include meta-commentary, intros, or sign-offs.
 `,
 
   // Story AI - Generate Image Prompt for Cover

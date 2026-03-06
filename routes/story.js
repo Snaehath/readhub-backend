@@ -184,16 +184,43 @@ router.post("/myStory", async (req, res) => {
           `--- [THE SCRIBE START] --- Chapter ${nextIndex + 1}: ${story.tableOfContents[nextIndex].title}`,
         );
         const chapterPrompt = PROMPTS.storyChapter(story, nextIndex, context);
-        const chapterContent = await askAI(chapterPrompt);
+        const chapterResponse = await askAI(chapterPrompt);
         console.log(
           `--- [THE SCRIBE FINISH] --- Chapter ${nextIndex + 1} complete.`,
         );
 
-        if (chapterContent && chapterContent.trim() !== "") {
+        if (chapterResponse && chapterResponse.trim() !== "") {
+          let title = story.tableOfContents[nextIndex].title;
+          let content = chapterResponse;
+
+          // Attempt to parse JSON response
+          try {
+            let cleanJson = chapterResponse;
+            const jsonStart = chapterResponse.indexOf("{");
+            const jsonEnd = chapterResponse.lastIndexOf("}");
+            if (jsonStart !== -1 && jsonEnd !== -1) {
+              cleanJson = chapterResponse.substring(jsonStart, jsonEnd + 1);
+            }
+            const parsed = JSON.parse(cleanJson);
+            if (parsed.content) {
+              content = parsed.content;
+              if (parsed.title) title = parsed.title;
+            }
+          } catch (e) {
+            console.log(
+              "[WRITER] JSON parse failed, falling back to legacy text cleaning...",
+            );
+            // Legacy cleaning for transition period
+            content = chapterResponse
+              .replace(/^TITLE:.*$/m, "")
+              .replace(/^CONTENT:/m, "")
+              .trim();
+          }
+
           story.chapters.push({
             chapterNumber: nextIndex + 1,
-            title: story.tableOfContents[nextIndex].title,
-            content: chapterContent,
+            title: title,
+            content: content,
             publishedAt: new Date(),
           });
 
@@ -225,6 +252,8 @@ function formatStorySummary(story) {
     genre: story.genre,
     subject: story.subject,
     synopsis: story.synopsis,
+    worldBuilding: story.worldBuilding,
+    characters: story.characters,
     authorName: story.authorName,
     coverImage: story.coverImage
       ? `http://localhost:5000${story.coverImage}`

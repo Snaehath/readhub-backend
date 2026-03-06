@@ -14,6 +14,7 @@ const StorySchema = new mongoose.Schema(
     synopsis: { type: String },
     characters: [
       {
+        _id: false,
         name: { type: String, required: true },
         description: { type: String, required: true },
       },
@@ -21,12 +22,14 @@ const StorySchema = new mongoose.Schema(
     worldBuilding: { type: String },
     tableOfContents: [
       {
+        _id: false,
         chapterNumber: { type: Number, required: true },
         title: { type: String, required: true },
       },
     ],
     chapters: [
       {
+        _id: false,
         chapterNumber: { type: Number, required: true },
         title: { type: String, required: true },
         content: { type: String, required: true },
@@ -37,6 +40,7 @@ const StorySchema = new mongoose.Schema(
     isCompleted: { type: Boolean, default: false },
     reviews: [
       {
+        _id: false,
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         rating: { type: Number, min: 1, max: 5 },
         review: { type: String },
@@ -46,6 +50,7 @@ const StorySchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    id: false,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
   },
