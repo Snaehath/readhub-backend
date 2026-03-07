@@ -40,6 +40,8 @@ router.post("/myStory", async (req, res) => {
       .json({ message: "Unauthorized: Invalid or missing token" });
   }
 
+  const { storyId } = req.body;
+
   const GLOBAL_LOCK_KEY = "GLOBAL_STORY_INIT";
 
   try {
@@ -59,10 +61,15 @@ router.post("/myStory", async (req, res) => {
       }
     }
 
-    // 2. Look for the current global active (non-completed) story
-    let story = await Story.findOne({ isCompleted: false }).sort({
-      createdAt: -1,
-    });
+    // 2. Look for the requested story OR the current global active (non-completed) story
+    let story;
+    if (storyId) {
+      story = await Story.findById(storyId);
+    } else {
+      story = await Story.findOne({ isCompleted: false }).sort({
+        createdAt: -1,
+      });
+    }
 
     // 3. PHASE 1: The Initiator Agent
     if (!story) {
@@ -170,18 +177,28 @@ router.post("/myStory", async (req, res) => {
         }
 
         const nextIndex = story.chapters.length;
+        const expectedTitle =
+          story.tableOfContents && story.tableOfContents[nextIndex]
+            ? story.tableOfContents[nextIndex].title
+            : `Chapter ${nextIndex + 1}`;
 
         // Build context from previous chapters (last 2 for continuity)
         const recentChapters = story.chapters.slice(-2);
         const context = recentChapters
-          .map(
-            (c) =>
-              `Chapter ${c.chapterNumber} (TITLE: ${c.title}):\n${c.content.substring(0, 500)}...`,
-          )
-          .join("\n\n");
+          .map((c, idx) => {
+            const isLast = idx === recentChapters.length - 1;
+            // Focus on the ending of the previous chapter so the agent knows where to pick up
+            const limit = isLast ? 3000 : 1000;
+            const snippet =
+              c.content.length > limit
+                ? `...${c.content.slice(-limit)}`
+                : c.content;
+            return `[PREVIOUS CHAPTER ${c.chapterNumber}: ${c.title} (Ending)]\n${snippet}`;
+          })
+          .join("\n\n---\n\n");
 
         console.log(
-          `--- [THE SCRIBE START] --- Chapter ${nextIndex + 1}: ${story.tableOfContents[nextIndex].title}`,
+          `--- [THE SCRIBE START] --- Chapter ${nextIndex + 1}: ${expectedTitle}`,
         );
         const chapterPrompt = PROMPTS.storyChapter(story, nextIndex, context);
         const chapterResponse = await askAI(chapterPrompt);
@@ -190,7 +207,7 @@ router.post("/myStory", async (req, res) => {
         );
 
         if (chapterResponse && chapterResponse.trim() !== "") {
-          let title = story.tableOfContents[nextIndex].title;
+          let title = expectedTitle;
           let content = chapterResponse;
 
           // Attempt to parse JSON response

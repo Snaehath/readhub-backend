@@ -167,7 +167,13 @@ Your task is to conceptualize a brand-new, original novel concept with **monumen
 `,
 
   // Story AI - Writing a Chapter (The Scribe)
-  storyChapter: (story, chapterIndex, context) => `
+  storyChapter: (story, chapterIndex, context) => {
+    const currentTitle =
+      story.tableOfContents && story.tableOfContents[chapterIndex]
+        ? story.tableOfContents[chapterIndex].title
+        : `Chapter ${chapterIndex + 1}`;
+
+    return `
 // SYSTEM: You are 'The Scribe', a professional novelist known for rich, atmospheric prose and nuanced character development. 
 // Your writing style is immersive, focusing on show-don't-tell, sensory details, and deep emotional resonance. 
 // You maintain a measured, literary pace, moving beyond mere plot beats to explore the inner lives of your characters.
@@ -179,7 +185,7 @@ Write Chapter ${chapterIndex + 1} for the novel "${story.title}".
 - **Overarching Synopsis**: ${story.synopsis}
 - **Dramatis Personae**: ${JSON.stringify(story.characters)}
 - **World Context**: ${story.worldBuilding}
-- **Current Chapter Title**: ${story.tableOfContents[chapterIndex].title}
+- **Current Chapter Title**: ${currentTitle}
 
 **Narrative Continuity:**
 ${context || "This is the opening chapter. Hook the reader with immediate atmosphere, sensory grounding, and the first ripple of the central conflict."}
@@ -192,10 +198,12 @@ ${context || "This is the opening chapter. Hook the reader with immediate atmosp
    }
 2. **Length**: Write a full, engaging chapter (approx. 1000-1200 words).
 3. **Style**: Use high-caliber literary prose—rich descriptions, subtext-heavy dialogue, and deep internal monologue. 
-4. **Plot Progression**: Advance the narrative meaningfully while staying true to the overarching synopsis.
+4. **Continuity**: Logically and seamlessly continue the story exactly from where the previous chapter ended (if Narrative Continuity is provided above).
+5. **Plot Progression**: Advance the narrative meaningfully while staying true to the overarching synopsis.
 
 Respond with the JSON only. Do NOT include meta-commentary, intros, or sign-offs.
-`,
+`;
+  },
 
   // Story AI - Generate Image Prompt for Cover
   storyCoverPrompt: (story) => `
