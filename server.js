@@ -23,16 +23,6 @@ mongoose
   .then(async () => {
     console.log("MongoDB connected");
 
-    // Check Local SLM (Ollama)
-    if (process.env.AI_MODE === "local") {
-      try {
-        await axios.get("http://localhost:11434/api/tags");
-        console.log("Local AI (Ollama) is ONLINE");
-      } catch (e) {
-        console.warn("Local AI (Ollama) is OFFLINE. Make sure it's running!");
-      }
-    }
-
     // Check Local Image Gen (Forge)
     try {
       await axios.get("http://127.0.0.1:7860/sdapi/v1/options", {
