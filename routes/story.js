@@ -276,6 +276,7 @@ function formatStorySummary(story) {
       ? `http://localhost:5000${story.coverImage}`
       : "https://via.placeholder.com/512x768?text=Generating+Art...",
     index: story._id.toString(),
+    storyType: story.storyType || "novel",
     isCompleted: story.isCompleted,
     currentChapterCount: story.chapters.length,
     maxChapters: story.maxChapters,
@@ -308,7 +309,7 @@ router.patch("/:id/review", async (req, res) => {
       .json({ message: "Unauthorized: Invalid or missing token" });
   }
 
-  const { rating, review } = req.body;
+  const { rating, review, reviewerName } = req.body; // Use reviewerName from body
 
   if (
     rating !== undefined &&
@@ -328,7 +329,7 @@ router.patch("/:id/review", async (req, res) => {
 
     // Add the new review to the array
     story.reviews.push({
-      userId: userData.userId,
+      reviewerName: reviewerName || userData.username || "Anonymous", // Use name from body or user object
       rating: rating,
       review: review,
       createdAt: new Date(),

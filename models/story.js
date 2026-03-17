@@ -10,6 +10,7 @@ const StorySchema = new mongoose.Schema(
     genre: { type: String, required: true },
     subject: { type: String, required: true },
     authorName: { type: String, required: true },
+    storyType: { type: String, default: "novel" }, // New key to distinguish story types
     coverImage: { type: String, default: "" },
     synopsis: { type: String },
     characters: [
@@ -41,7 +42,7 @@ const StorySchema = new mongoose.Schema(
     reviews: [
       {
         _id: false,
-        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        reviewerName: { type: String }, // Flexible name instead of userId
         rating: { type: Number, min: 1, max: 5 },
         review: { type: String },
         createdAt: { type: Date, default: Date.now },
@@ -59,7 +60,7 @@ const StorySchema = new mongoose.Schema(
 StorySchema.virtual("averageRating").get(function () {
   if (!this.reviews || this.reviews.length === 0) return 0;
   const sum = this.reviews.reduce((acc, curr) => acc + curr.rating, 0);
-  return (sum / this.reviews.length).toFixed(1);
+  return Number((sum / this.reviews.length).toFixed(1));
 });
 
 module.exports = mongoose.models.Story || mongoose.model("Story", StorySchema);
