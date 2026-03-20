@@ -18,7 +18,7 @@ function formatStorySummary(story) {
     currentChapterCount: story.chapters.length,
     maxChapters: story.maxChapters,
     averageRating: story.averageRating,
-    reviewCount: story.reviews.length,
+    reviewCount: story.reviewCount,
   };
 }
 
@@ -30,7 +30,6 @@ function formatStoryResponse(story) {
     characters: story.characters,
     tableOfContents: story.tableOfContents,
     chapters: story.chapters,
-    reviews: story.reviews,
   };
 }
 

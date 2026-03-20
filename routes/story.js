@@ -1,13 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const axios = require("axios");
-const Story = require("../models/story");
 const { askAI } = require("../models/aiService");
 const { verifyToken } = require("../helper/authJwt");
+const Story = require("../models/story");
+const Review = require("../models/review");
 const PROMPTS = require("../helper/prompts");
 const { formatStorySummary, formatStoryResponse } = require("../helper/utils");
 
-// Get all completed stories
+// Get all stories
 router.get("/allStories", async (req, res) => {
   try {
     // Show all stories (completed and ongoing)
@@ -239,8 +240,6 @@ router.post("/myStory", async (req, res) => {
   }
 });
 
-
-
 // Update story rating and review
 router.patch("/:id/review", async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -271,25 +270,48 @@ router.patch("/:id/review", async (req, res) => {
       return res.status(404).json({ error: "Story not found." });
     }
 
-    // Add the new review to the array
-    story.reviews.push({
-      reviewerName: reviewerName || userData.username || "Anonymous", // Use name from body or user object
+    // Create the new review document
+    const newReview = new Review({
+      storyId: req.params.id,
+      reviewerName: reviewerName || userData.username || "Anonymous",
       rating: rating,
       review: review,
-      createdAt: new Date(),
     });
 
+    await newReview.save();
+
+    // Update the story's aggregate rating and review count
+    story.reviewCount += 1;
+    story.ratingSum += rating;
     await story.save();
 
     res.status(200).json({
       message: "Feedback submitted successfully",
       story: formatStoryResponse(story),
+      review: newReview,
     });
   } catch (err) {
     console.error("Error updating story review:", err);
     res
       .status(500)
       .json({ error: "Internal server error while updating your review." });
+  }
+});
+
+// Get individual reviews for a story
+router.get("/:id/reviews", async (req, res) => {
+  try {
+    const reviews = await Review.find({ storyId: req.params.id }).sort({
+      createdAt: -1,
+    });
+
+    res.status(200).json({
+      message: "Reviews retrieved successfully",
+      reviews: reviews,
+    });
+  } catch (err) {
+    console.error("Error fetching reviews:", err);
+    res.status(500).json({ error: "Internal server error while fetching reviews." });
   }
 });
 
