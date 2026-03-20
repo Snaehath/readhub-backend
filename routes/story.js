@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const axios = require("axios");
-const { askAI } = require("../models/aiService");
+const { chatWithGemini } = require("../models/geminiClient");
 const { verifyToken } = require("../helper/authJwt");
 const Story = require("../models/story");
 const Review = require("../models/review");
@@ -78,7 +78,7 @@ router.post("/myStory", async (req, res) => {
         console.log("AGENT 1: Initializing a new global epic...");
 
         const initPrompt = PROMPTS.storyInit();
-        const initResponse = await askAI(initPrompt);
+        const initResponse = await chatWithGemini(initPrompt);
 
         let cleanJson = initResponse;
         const jsonStart = initResponse.indexOf("{");
@@ -180,7 +180,7 @@ router.post("/myStory", async (req, res) => {
           `--- [THE SCRIBE START] --- Chapter ${nextIndex + 1}: ${expectedTitle}`,
         );
         const chapterPrompt = PROMPTS.storyChapter(story, nextIndex, context);
-        const chapterResponse = await askAI(chapterPrompt);
+        const chapterResponse = await chatWithGemini(chapterPrompt);
         console.log(
           `--- [THE SCRIBE FINISH] --- Chapter ${nextIndex + 1} complete.`,
         );
