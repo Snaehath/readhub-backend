@@ -3,7 +3,6 @@ const router = express.Router();
 const axios = require("axios");
 const Story = require("../models/story");
 const { askAI } = require("../models/aiService");
-const { generateStoryCover } = require("../models/forgeClient");
 const { verifyToken } = require("../helper/authJwt");
 const PROMPTS = require("../helper/prompts");
 
@@ -110,28 +109,6 @@ router.post("/myStory", async (req, res) => {
         });
 
         await newStory.save();
-
-        // PHASE 1.5: The Artist Agent (Generate Cover)
-        try {
-          // Pre-check if Forge is available to avoid long timeouts
-          await axios.get("http://127.0.0.1:7860/sdapi/v1/options", {
-            timeout: 2000,
-          });
-
-          console.log("[ARTIST] Forge is online. Crafting cover art...");
-          const imagePrompt = PROMPTS.storyCoverPrompt(newStory);
-          const visualIdea = await askAI(imagePrompt);
-          const coverPath = await generateStoryCover(visualIdea, newStory._id);
-
-          if (coverPath) {
-            newStory.coverImage = coverPath;
-            await newStory.save();
-          }
-        } catch (imgErr) {
-          console.warn(
-            "[ARTIST] Forge is offline or unreachable. Skipping cover generation.",
-          );
-        }
 
         return newStory;
       })();
@@ -346,37 +323,6 @@ router.patch("/:id/review", async (req, res) => {
     res
       .status(500)
       .json({ error: "Internal server error while updating your review." });
-  }
-});
-
-// Manually regenerate cover image for a story (Admin or Owner)
-router.post("/:id/regenerate-cover", async (req, res) => {
-  try {
-    const story = await Story.findById(req.params.id);
-    if (!story) return res.status(404).json({ message: "Story not found" });
-
-    console.log(`[MANUAL] Regenerating cover for story: ${story.title}`);
-
-    // PHASE 1: Generate Art Prompt
-    const imagePrompt = PROMPTS.storyCoverPrompt(story);
-    const visualIdea = await askAI(imagePrompt);
-
-    // PHASE 2: Generate and Save Image
-    const coverPath = await generateStoryCover(visualIdea, story._id);
-
-    if (coverPath) {
-      story.coverImage = coverPath;
-      await story.save();
-      return res.status(200).json({
-        message: "Cover regenerated successfully",
-        coverImage: `http://localhost:5000${coverPath}`,
-      });
-    }
-
-    res.status(500).json({ error: "Failed to generate cover image" });
-  } catch (err) {
-    console.error("Manual Cover Gen Error:", err);
-    res.status(500).json({ error: "Internal server error" });
   }
 });
 
