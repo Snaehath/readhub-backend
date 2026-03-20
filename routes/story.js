@@ -107,7 +107,7 @@ router.post("/myStory", async (req, res) => {
           characters: storyData.characters,
           tableOfContents: storyData.tableOfContents,
           chapters: [],
-          coverImage: "",
+          coverImage: "/covers/cover_" + newStory._id + ".jpg",
         });
 
         await newStory.save();

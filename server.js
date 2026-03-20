@@ -22,16 +22,6 @@ mongoose
   .connect(mongodbURI)
   .then(async () => {
     console.log("MongoDB connected");
-
-    // Check Local Image Gen (Forge)
-    try {
-      await axios.get("http://127.0.0.1:7860/sdapi/v1/options", {
-        timeout: 2000,
-      });
-      console.log("Image Gen AI (Forge) is ONLINE");
-    } catch (e) {
-      console.warn("Image Gen AI (Forge) is OFFLINE. (Check Stability Matrix)");
-    }
   })
   .catch((err) => console.error("MongoDB connection error:", err));
 
