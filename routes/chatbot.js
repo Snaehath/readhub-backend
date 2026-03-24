@@ -32,7 +32,8 @@ function detectIntent(message) {
     isBook: /recommend|book/.test(lower),
     isSummary: /summarize|magazine/.test(lower),
     matchedCategory: categories.find((cat) => lower.includes(cat)),
-    isNews: lower.includes("news"),
+    isNews: /news|headline|report/.test(lower),
+    isFunny: /funny|joke|witty|hilarious/.test(lower),
   };
 }
 
