@@ -3,7 +3,8 @@ const router = express.Router();
 const bcrypt = require("bcrypt");
 const User = require("../models/user");
 const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET; // Make sure this is set in .env or Render
+const JWT_SECRET = process.env.JWT_SECRET;
+const { verifyToken } = require("../helper/authJwt");
 
 router.post("/addUser", async (req, res) => {
   try {
@@ -197,6 +198,110 @@ router.put("/reset-password", async (req, res) => {
     res.status(200).json({ message: "Password reset successfully." });
   } catch (err) {
     console.error("Error resetting password:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Get current user details
+router.get("/me", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+  const decoded = verifyToken(token);
+
+  if (!decoded) {
+    return res.status(401).json({ error: "Unauthorized: Invalid token." });
+  }
+
+  try {
+    const user = await User.findById(decoded.userId).select("-passwordhash");
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+    res.status(200).json(user);
+  } catch (err) {
+    console.error("Error fetching user data:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Toggle Like
+router.post("/like-news", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+  const decoded = verifyToken(token);
+
+  if (!decoded) {
+    return res.status(401).json({ error: "Unauthorized: Invalid token." });
+  }
+
+  try {
+    const { newsId, country } = req.body;
+    if (!newsId || !["us", "in"].includes(country)) {
+      return res
+        .status(400)
+        .json({ error: "newsId and valid country (us/in) are required." });
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(404).json({ error: "User not found." });
+
+    const field = country === "us" ? "likes_us" : "likes_in";
+
+    const index = user[field].findIndex((id) => id.toString() === newsId);
+    if (index === -1) {
+      user[field].push(newsId);
+    } else {
+      user[field].splice(index, 1);
+    }
+
+    await user.save();
+    res.status(200).json({
+      message: index === -1 ? "Added to likes" : "Removed from likes",
+      likes: user[field],
+    });
+  } catch (err) {
+    console.error("Error toggling like:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Toggle Bookmark
+router.post("/bookmark-news", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+  const decoded = verifyToken(token);
+
+  if (!decoded) {
+    return res.status(401).json({ error: "Unauthorized: Invalid token." });
+  }
+
+  try {
+    const { newsId, country } = req.body;
+    if (!newsId || !["us", "in"].includes(country)) {
+      return res
+        .status(400)
+        .json({ error: "newsId and valid country (us/in) are required." });
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) return res.status(404).json({ error: "User not found." });
+
+    const field = country === "us" ? "bookmarks_us" : "bookmarks_in";
+
+    const index = user[field].findIndex((id) => id.toString() === newsId);
+    if (index === -1) {
+      user[field].push(newsId);
+    } else {
+      user[field].splice(index, 1);
+    }
+
+    await user.save();
+    res.status(200).json({
+      message: index === -1 ? "Added to bookmarks" : "Removed from bookmarks",
+      bookmarks: user[field],
+    });
+  } catch (err) {
+    console.error("Error toggling bookmark:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

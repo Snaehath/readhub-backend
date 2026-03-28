@@ -206,6 +206,79 @@ ${context || "This is the opening chapter. Hook the reader with immediate atmosp
 Respond with the JSON only. Do NOT include meta-commentary, intros, or sign-offs.
 `;
   },
+
+  // AI Reporter Phase 1 - Editorial Planning (The Lead Editor)
+  aiNewsInit: (userSuggestion) => `
+You are a senior news editor at a prestigious international publication. You have been given a story tip and must plan a complete, publishable news article.
+
+Story tip: "${userSuggestion || "The future of global digital intelligence"}"
+
+Your job is to:
+1. Assign this story to the most fitting news category
+2. Craft a compelling, click-worthy headline — not clickbait, but genuinely newsworthy
+3. Write a crisp editor's brief with 5 reporting angles the staff writer should cover
+4. Suggest a believable journalist byline
+5. Create 3-4 fictional but realistic expert sources the writer MUST quote (DO NOT use real people — invent plausible names, titles, and organisations)
+
+Valid categories: Technology, Politics, Business, Science, Health, Environment, World, Finance, Culture, Defence
+
+Respond ONLY in this exact JSON format with no extra text:
+{
+  "title": "Compelling, publishable news headline",
+  "topic": "Core subject area in 3-5 words",
+  "category": "One category from the valid list above",
+  "authorName": "Full realistic journalist name (e.g. Marcus Ellroy, Priya Nair)",
+  "summary": "A tight 2-3 sentence editor's summary of the story angle, written as an internal brief for the writer.",
+  "hashtags": ["#RelevantTag", "#TopicTag", "#CategoryTag", "#TrendTag"],
+  "sources": [
+    { "name": "Dr. Fictional Name", "title": "Senior Research Director", "org": "Invented Institute/University/Company" },
+    { "name": "Another Name", "title": "Chief Policy Analyst", "org": "Another Made-up Organisation" },
+    { "name": "Third Name", "title": "Industry Expert", "org": "Plausible Firm Name" }
+  ],
+  "blueprint": [
+    "Angle 1: Scene-setter — the immediate news hook or breaking development",
+    "Angle 2: Background — historical context or prior events that led here",
+    "Angle 3: Stakeholder reactions — who is affected, who is responding, and how",
+    "Angle 4: Expert analysis — what specialists, data, or reports say",
+    "Angle 5: What happens next — implications, timelines, policy responses"
+  ]
+}
+`,
+
+  // AI Reporter Phase 2 - Article Writing (The Staff Writer)
+  aiNewsReport: (news, blueprint) => `
+You are an award-winning staff writer for a major international news outlet. You have been given the following editorial brief and must write a complete, publication-ready news article.
+
+**Editorial Brief:**
+- Headline: ${news.title}
+- Category: ${news.category}
+- Summary/Angle: ${news.summary}
+- Reporting Angles: ${blueprint.join(" | ")}
+
+**Approved Sources (quote ONLY these fictional characters — do NOT invent new names or reference real people):**
+${news.sources ? news.sources.map((s) => `- ${s.name}, ${s.title} at ${s.org}`).join("\n") : "- Use plausible invented names only"}
+
+**Your Task:**
+Write a complete, compelling news article of 1200-1500 words that reads as if written by a real journalist.
+
+**CRITICAL Writing Rules:**
+1. Open with a strong, narrative lede — drop the reader into the action immediately. No "In recent years..." or "It is worth noting..." style openings.
+2. Use the inverted pyramid structure: most important information first, context and colour later.
+3. Include 3-4 quotes from the approved sources above. Make quotes sound natural and conversational — not corporate speak.
+4. Use specific, plausible figures, dates, and statistics (e.g., "a 23% increase since Q3 2023" not "a significant increase").
+5. Vary sentence length dramatically. Mix short punchy sentences with longer analytical ones. Use paragraph breaks often.
+6. Use transitional phrases that feel human: "But not everyone is convinced.", "The numbers tell a different story.", "Three years ago, this would have been unthinkable."
+7. Write in active voice wherever possible. Avoid passive constructions that feel bureaucratic.
+8. Do NOT use bullet points, numbered lists, or markdown headers in the article body. This is a flowing prose news article.
+9. End with a forward-looking paragraph — what happens next, what to watch for.
+10. NEVER use phrases like "It is important to note", "In conclusion", "Furthermore", "Moreover", "Delve", "Underscore", "Navigate", "Multifaceted", or any phrase that sounds like AI output.
+
+**Format:**
+Respond ONLY in this exact JSON (no extra text):
+{
+  "content": "Full article text here as a single string. Use \\n\\n to separate paragraphs. No markdown headers or bullets inside the content."
+}
+`,
 };
 
 module.exports = PROMPTS;

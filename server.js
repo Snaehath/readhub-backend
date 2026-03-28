@@ -9,6 +9,7 @@ const booksRoutes = require("./routes/books");
 const chatBotRoute = require("./routes/chatbot");
 const userRoutes = require("./routes/user");
 const storyRoutes = require("./routes/story");
+const aiReporterRoutes = require("./routes/aiReporter");
 
 const app = express();
 app.use(cors());
@@ -29,7 +30,8 @@ app.use("/api/news", newsRoutes);
 app.use("/api/books", booksRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/ai", chatBotRoute);
-app.use("/api/story", storyRoutes);
+app.use("/api/ai-hub/story", storyRoutes);
+app.use("/api/ai-hub/news", aiReporterRoutes);
 
 app.post("/api/ping", (req, res) => {
   console.log("Received ping from frontend");
