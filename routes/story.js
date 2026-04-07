@@ -4,7 +4,6 @@ const axios = require("axios");
 const { chatWithGemini } = require("../models/geminiClient");
 const { verifyToken } = require("../helper/authJwt");
 const Story = require("../models/story");
-const Review = require("../models/review");
 const PROMPTS = require("../helper/prompts");
 const { formatStorySummary, formatStoryResponse } = require("../helper/utils");
 
@@ -270,15 +269,14 @@ router.patch("/:id/review", async (req, res) => {
       return res.status(404).json({ error: "Story not found." });
     }
 
-    // Create the new review document
-    const newReview = new Review({
-      storyId: req.params.id,
+    // Add the new review to the embedded array
+    story.reviews.push({
+      userId: userData.userId,
       reviewerName: reviewerName || userData.username || "Anonymous",
       rating: rating,
       review: review,
+      createdAt: new Date(),
     });
-
-    await newReview.save();
 
     // Update the story's aggregate rating and review count
     story.reviewCount += 1;
@@ -288,7 +286,7 @@ router.patch("/:id/review", async (req, res) => {
     res.status(200).json({
       message: "Feedback submitted successfully",
       story: formatStoryResponse(story),
-      review: newReview,
+      review: story.reviews[story.reviews.length - 1],
     });
   } catch (err) {
     console.error("Error updating story review:", err);
@@ -301,13 +299,14 @@ router.patch("/:id/review", async (req, res) => {
 // Get individual reviews for a story
 router.get("/:id/reviews", async (req, res) => {
   try {
-    const reviews = await Review.find({ storyId: req.params.id }).sort({
-      createdAt: -1,
-    });
+    const story = await Story.findById(req.params.id);
+    if (!story) {
+      return res.status(404).json({ error: "Story not found." });
+    }
 
     res.status(200).json({
       message: "Reviews retrieved successfully",
-      reviews: reviews,
+      reviews: story.reviews || [],
     });
   } catch (err) {
     console.error("Error fetching reviews:", err);

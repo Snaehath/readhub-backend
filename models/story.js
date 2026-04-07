@@ -41,6 +41,15 @@ const StorySchema = new mongoose.Schema(
     isCompleted: { type: Boolean, default: false },
     reviewCount: { type: Number, default: 0 },
     ratingSum: { type: Number, default: 0 },
+    reviews: [
+      {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        reviewerName: { type: String },
+        rating: { type: Number, required: true, min: 1, max: 5 },
+        review: { type: String },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: true,
@@ -51,8 +60,10 @@ const StorySchema = new mongoose.Schema(
 );
 
 StorySchema.virtual("averageRating").get(function () {
-  if (this.reviewCount === 0) return 0;
-  return Number((this.ratingSum / this.reviewCount).toFixed(1));
+  const count = this.reviewCount || 0;
+  const sum = this.ratingSum || 0;
+  if (count === 0) return 0;
+  return Number((sum / count).toFixed(1));
 });
 
 module.exports = mongoose.models.Story || mongoose.model("Story", StorySchema);

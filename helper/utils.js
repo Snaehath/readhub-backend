@@ -30,6 +30,7 @@ function formatStoryResponse(story) {
     characters: story.characters,
     tableOfContents: story.tableOfContents,
     chapters: story.chapters,
+    reviews: story.reviews || [],
   };
 }
 
