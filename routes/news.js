@@ -309,6 +309,78 @@ router.get("/newIn/pagination", async (req, res) => {
   }
 });
 
+// Search US news
+router.get("/search/us", async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 12;
+  const q = req.query.q;
+
+  try {
+    const options = {
+      page,
+      limit,
+      sort: { publishedAt: -1 },
+    };
+
+    const query = q
+      ? {
+          $or: [
+            { title: { $regex: q, $options: "i" } },
+            { description: { $regex: q, $options: "i" } },
+          ],
+        }
+      : {};
+
+    const result = await News.paginate(query, options);
+
+    res.json({
+      currentPage: result.page,
+      totalPages: result.totalPages,
+      totalArticles: result.totalDocs,
+      articles: result.docs,
+    });
+  } catch (err) {
+    console.error("Error searching US news:", err.message);
+    res.status(500).json({ error: "Failed to search news" });
+  }
+});
+
+// Search India news
+router.get("/search/in", async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 12;
+  const q = req.query.q;
+
+  try {
+    const options = {
+      page,
+      limit,
+      sort: { publishedAt: -1 },
+    };
+
+    const query = q
+      ? {
+          $or: [
+            { title: { $regex: q, $options: "i" } },
+            { description: { $regex: q, $options: "i" } },
+          ],
+        }
+      : {};
+
+    const result = await NewsIn.paginate(query, options);
+
+    res.json({
+      currentPage: result.page,
+      totalPages: result.totalPages,
+      totalArticles: result.totalDocs,
+      articles: result.docs,
+    });
+  } catch (err) {
+    console.error("Error searching IN news:", err.message);
+    res.status(500).json({ error: "Failed to search news" });
+  }
+});
+
 // DELETE /api/news/delete-today/us
 router.delete("/delete-today/us", async (req, res) => {
   try {
