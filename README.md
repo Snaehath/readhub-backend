@@ -49,25 +49,31 @@ backend/
 
 ## ⚙️ Setup & Installation
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/Snaehath/readhub-backend.git
-    cd readhub-backend
-    ```
-2.  **Install dependencies**:
-    ```bash
-    npm install
-    ```
-3.  **Environment Variables**:
-    Create a `.env` file in the root with the following keys:
-    ```env
-    PORT=5000
-    MONGO_URI=your_mongodb_connection_string
-    JWT_SECRET=your_jwt_secret
-    GEMINI_API_KEY=your_gemini_key
-    ```
-4.  **Run the application**:
-    - Development mode: `npm run dev`
-    - Production mode: `npm start`
+1. **Clone the repository**:
+
+   ```bash
+   git clone https://github.com/Snaehath/readhub-backend.git
+   cd readhub-backend
+   ```
+
+2. **Install dependencies**:
+
+   ```bash
+   npm install
+   ```
+
+3. **Environment Variables**:
+   Create a `.env` file in the root with the following keys:
+
+   ```env
+   PORT=5000
+   MONGO_URI=your_mongodb_connection_string
+   JWT_SECRET=your_jwt_secret
+   GEMINI_API_KEY=your_gemini_key
+   ```
+
+4. **Run the application**:
+   - Development mode: `npm run dev`
+   - Production mode: `npm start`
 
 ---

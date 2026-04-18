@@ -314,6 +314,7 @@ router.get("/search/us", async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 12;
   const q = req.query.q;
+  const category = req.query.category;
 
   try {
     const options = {
@@ -322,7 +323,7 @@ router.get("/search/us", async (req, res) => {
       sort: { publishedAt: -1 },
     };
 
-    const query = q
+    let query = q
       ? {
           $or: [
             { title: { $regex: q, $options: "i" } },
@@ -330,6 +331,10 @@ router.get("/search/us", async (req, res) => {
           ],
         }
       : {};
+
+    if (category && category !== "all") {
+      query.category = category;
+    }
 
     const result = await News.paginate(query, options);
 
@@ -350,6 +355,7 @@ router.get("/search/in", async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 12;
   const q = req.query.q;
+  const category = req.query.category;
 
   try {
     const options = {
@@ -358,7 +364,7 @@ router.get("/search/in", async (req, res) => {
       sort: { publishedAt: -1 },
     };
 
-    const query = q
+    let query = q
       ? {
           $or: [
             { title: { $regex: q, $options: "i" } },
@@ -366,6 +372,10 @@ router.get("/search/in", async (req, res) => {
           ],
         }
       : {};
+
+    if (category && category !== "all") {
+      query.category = category;
+    }
 
     const result = await NewsIn.paginate(query, options);
 

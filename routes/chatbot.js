@@ -163,7 +163,7 @@ const handleAskAi = async ({ id, country }) => {
 router.post("/futureNews", async (req, res) => {
   try {
     const { userMessage } = req.body;
-    const { id, selectedCountry } = userMessage;
+    const { id, selectedCountry, targetYear, previousForecast } = userMessage;
     const objectId = Types.ObjectId.createFromHexString(id);
 
     const article =
@@ -174,7 +174,7 @@ router.post("/futureNews", async (req, res) => {
     if (!article)
       return res.status(404).json({ message: "Article not found." });
 
-    const prompt = PROMPTS.futureNews(article);
+    const prompt = PROMPTS.futureNews(article, targetYear || 1, previousForecast || "");
 
     const futureArticle = await chatWithGemini(prompt);
 

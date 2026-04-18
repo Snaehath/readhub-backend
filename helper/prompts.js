@@ -62,46 +62,61 @@ Respond with the explanation only. Do NOT include greetings or sign-offs.
 `,
 
   // Future News Prediction
-  futureNews: (article) => `
-You are an experienced investigative journalist and trend analyst specializing in forward-looking news analysis.
+  // Staged Forecast AI Prompt
+  futureNews: (article, targetYear = 1, previousForecast = "") => {
+    const isFirstStage = targetYear === 1;
 
-**Original Article:**
-- Title: "${article.title}"
-- Content: ${article.content}
-- Published: ${article.publishedAt}
-- Source: ${article.url}
+    return `
+You are the **ReadHub AI Bureau**, a high-precision predictive intelligence engine.
+Your task is to provide a ${isFirstStage ? "Year 1 TEASER forecast" : `Year ${targetYear} EXTENSION`} for the provided news article.
 
-**Your Assignment:**
-Write a compelling speculative news article projecting how this story might evolve over the next 2 years.
+**Intelligence Context:**
+- **Headline:** "${article.title}"
+- **Drafting Basis:** ${article.content}
 
-**Structure:**
-Create a timeline with 4 milestones (every 6 months) showing plausible future developments.
+${
+  !isFirstStage
+    ? `
+**Contextual Trajectory:**
+${previousForecast}
 
-**For each milestone, include:**
-- A bold subheading: "**6 Months Later**", "**1 Year Later**", "**1 Year 6 Months Later**", etc.
-- Realistic developments, challenges, or breakthroughs
-- Plausible expert quotes or statistics
-- References to the original article where relevant
-- Consequences and ripple effects
+**Current Focus:**
+Provide the **Year ${targetYear} Analysis ONLY**. 
+`
+    : `
+**Current Focus:**
+Generate the foundational **Year 1 Report**. 
+`
+}
 
-**Writing Guidelines:**
-- Start with a clear disclaimer: This is a speculative scenario, not actual reporting
-- Use professional journalistic style (active voice, clear sentences)
-- Make it engaging: include conflicts, surprises, and turning points
-- Reference the original article URL (${article.url}) to maintain continuity
-- Include diverse perspectives and stakeholder reactions
-- End with a strong conclusion about long-term implications
+**OUTPUT FORMAT:**
 
-**Timeline Hooks:**
-- **After 6 months:** Initial reactions and immediate consequences
-- **After 12 months:** First major turning point or challenge
-- **After 18 months:** Secondary effects and adaptations
-- **After 24 months:** Breakthrough, resolution, or escalation
-- **After 30 months:** Broader societal or industry impact
-- **After 36 months:** Long-term outcomes and future outlook
+${
+  isFirstStage
+    ? `
+1. **### Core Predictions**
+   Provide 3 bolded bullet points summarizing the most critical shifts across the entire 3-year horizon.
 
-Respond with the article only. Do NOT include commentary, greetings, or meta-discussion.
-`,
+2. **### Detailed Analysis**
+   Divide this analysis into TWO distinct chronological phases:
+   - **#### 6 Months** (Immediate ripples and primary consequences)
+   - **#### 1 Year** (First major turning point)
+`
+    : `
+**### Detailed Analysis (Year ${targetYear})**
+Divide this analysis into TWO distinct chronological phases:
+   - **#### ${targetYear - 1}.5 Year** (Escalation or secondary effects)
+   - **#### ${targetYear} Year** (Systemic realignment or resolution)
+`
+}
+
+**Final Constraints:**
+- Do NOT repeat the bullet points in the detailed analysis.
+- Use sophisticated, senior intelligence analyst persona.
+- Do NOT include greetings or status lines.
+- For extensions, ensure seamless narrative continuity from the previous forecast.
+`;
+  },
 
   // Fallback Prompt for General Queries
   fallback: (userMessage) => `
