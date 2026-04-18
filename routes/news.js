@@ -25,6 +25,7 @@ router.get("/fetch/us", async (req, res) => {
           const saved = await News.create({
             title: article.title,
             description: article.description,
+            content: article.content,
             url: article.url,
             urlToImage: article.urlToImage,
             publishedAt: article.publishedAt,
@@ -124,6 +125,7 @@ router.get("/fetch-categories/us", async (req, res) => {
               $setOnInsert: {
                 title: article.title,
                 description: article.description,
+                content: article.content,
                 url: article.url,
                 urlToImage: article.urlToImage,
                 publishedAt: article.publishedAt,
