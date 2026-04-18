@@ -141,22 +141,23 @@ The user has provided the following input: "${userMessage}"
 Respond with the INTELLIGENCE BRIEF only.
 `,
 
-  // Story AI - Initialization (The Architect)
+  // Story AI - Initialization (The Chief Architect)
   storyInit: () => `
-// SYSTEM: You are 'The Architect', a literary novelist and world-builder. 
-// Your goal is to create a masterpiece of literary fiction that is both critically acclaimed and deeply engaging. 
-// You excel at defining complex themes, realistic character psychology, and immersive settings.
+// SYSTEM: You are the **Chief Architect of the ReadHub AI Chronicles**. 
+// Your mission is to conceptualize a monumental narrative masterpiece for the Archive.
+// You are a senior creative strategist, world-builder, and literary architect.
+// You excel at defining complex themes, Realistic character psychology, and immersive, layered settings.
 
-Your task is to conceptualize a brand-new, original novel concept with **monumental scale** and **profound thematic resonance** that will be told over 9 chapters.
+Your task is to blueprint a brand-new, original novel concept with **profound thematic resonance** that will be told over 9 chapters.
 
 **CRITICAL GUIDELINE: GENRE DIVERSITY**
-- **DO NOT** write a story centered on "Cosmic Horror" or "Deep Space" exploration (these have been overused recently).
+- **DO NOT** write a story centered on "Cosmic Horror" or "Deep Space" exploration.
 - Focus on high-stakes, grounded-but-extraordinary narrative archetypes such as:
-  1. **Archaeological Adventure**: Ancient enigmas, historical puzzles, and dangerous expeditions (e.g., Tomb Raider, Indiana Jones).
-  2. **Titan/Behemoth Suspense**: Human-scale stories set against the backdrop of massive, ancient biological forces (e.g., Monarch: Legacy of Monsters).
-  3. **Mythic Resonance**: Reimagining classical epics with modern depth—specifically Ancient Greek tragedies or heroism (e.g., God of War, Song of Achilles).
-  4. **Historical Occult**: Real-world history blended with dark, hidden supernatural undercurrents.
-  5. **Deconstructed Superheroism**: Stories about the cost of power, corruption, and the consequences of superpowered humans (e.g., The Boys, Invincible).
+  1. **Archaeological Adventure**: Ancient enigmas and dangerous expeditions.
+  2. **Titan/Behemoth Suspense**: Human-scale stories set against massive biological forces.
+  3. **Mythic Resonance**: Reimagining classical heroism with modern depth.
+  4. **Historical Occult**: Real-world history blended with hidden supernatural undercurrents.
+  5. **Deconstructed Superheroism**: The cost of power and the corruption of heroism.
 
 **Guidelines for Blueprinting:**
 1. **Genre**: Max two genres, using evocative descriptors (e.g., "Mythic Archeology", "Kaiju Survival").
@@ -186,7 +187,7 @@ Your task is to conceptualize a brand-new, original novel concept with **monumen
 }
 `,
 
-  // Story AI - Writing a Chapter (The Scribe)
+  // Story AI - Writing a Chapter (The Master Scrivener)
   storyChapter: (story, chapterIndex, context) => {
     const currentTitle =
       story.tableOfContents && story.tableOfContents[chapterIndex]
@@ -194,15 +195,16 @@ Your task is to conceptualize a brand-new, original novel concept with **monumen
         : `Chapter ${chapterIndex + 1}`;
 
     return `
-// SYSTEM: You are 'The Scribe', a professional novelist known for rich, atmospheric prose and nuanced character development. 
-// Your writing style is immersive, focusing on show-don't-tell, sensory details, and deep emotional resonance. 
-// You maintain a measured, literary pace, moving beyond mere plot beats to explore the inner lives of your characters.
+// SYSTEM: You are the **Master Scrivener of the ReadHub AI Chronicles**. 
+// You are a senior literary stylist known for high-resolution, atmospheric prose and nuanced character psychology. 
+// Your writing style is immersive, focusing on show-don't-tell, sensory grounding, and deep emotional resonance. 
+// You maintain a measured, literary pace, moving beyond plot beats to explore the inner lives of the Chronicles' subjects.
 
-Write Chapter ${chapterIndex + 1} for the novel "${story.title}".
+Write Chapter ${chapterIndex + 1} for the Chronicle titled "${story.title}".
 
-**Blueprint Metadata:**
+**Chronicle Blueprint:**
 - **Genre**: ${story.genre}
-- **Overarching Synopsis**: ${story.synopsis}
+- **Master Synopsis**: ${story.synopsis}
 - **Dramatis Personae**: ${JSON.stringify(story.characters)}
 - **World Context**: ${story.worldBuilding}
 - **Current Chapter Title**: ${currentTitle}

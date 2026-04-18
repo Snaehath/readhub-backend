@@ -10,7 +10,7 @@ function formatStorySummary(story) {
     characters: story.characters,
     authorName: story.authorName,
     coverImage: story.coverImage
-      ? `http://localhost:5000${story.coverImage}`
+      ? story.coverImage
       : "https://via.placeholder.com/512x768?text=Generating+Art...",
     index: story._id.toString(),
     storyType: story.storyType || "novel",
