@@ -18,6 +18,18 @@ class AgentEventPipeline extends EventEmitter {
     this.res.write(`data: ${JSON.stringify(event)}\n\n`);
   }
 
+  startHeartbeat() {
+    this.heartbeatInterval = setInterval(() => {
+      this.res.write(': heartbeat\n\n'); // SSE Comment as heartbeat
+    }, 15000); // 15 seconds pulse
+  }
+
+  stopHeartbeat() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+  }
+
   status(message) {
     this.emitEvent('status', message);
   }

@@ -30,6 +30,7 @@ router.get("/chat-stream", async (req, res) => {
   res.flushHeaders();
 
   const pipeline = new AgentEventPipeline(res);
+  pipeline.startHeartbeat(); // 💓 Keep Render alive
   const startTime = Date.now();
 
   try {
@@ -148,11 +149,13 @@ router.get("/chat-stream", async (req, res) => {
 
     // Send Final Event
     pipeline.final(finalReply, thoughts, latency);
+    pipeline.stopHeartbeat();
     res.end();
 
   } catch (error) {
     console.error("Stream Error:", error.message);
     pipeline.emitEvent('error', "Intelligence blackout occurred.");
+    pipeline.stopHeartbeat();
     res.end();
   }
 });
