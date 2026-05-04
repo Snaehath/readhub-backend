@@ -112,9 +112,7 @@ router.get("/chat-stream", async (req, res) => {
         
         const sources = Array.from(allSources);
         if (sources.length > 0) {
-          pipeline.emitEvent('sources', { 
-            type: "status", 
-            message: `Validation complete. Cross-referenced ${sources.length} sources.`,
+          pipeline.emitEvent('sources', `Validation complete. Cross-referenced ${sources.length} sources.`, { 
             sources: sources 
           });
         }
