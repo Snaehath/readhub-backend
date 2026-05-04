@@ -228,4 +228,64 @@ router.delete("/history", async (req, res) => {
   }
 });
 
+/**
+ * ONE-OFF CHAT (Ask AI Modal)
+ */
+router.post("/chat", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+  const userData = verifyToken(token);
+  if (!userData) return res.status(401).json({ message: "Unauthorized" });
+
+  const { userMessage } = req.body;
+  
+  try {
+    let prompt = typeof userMessage === 'string' ? userMessage : "";
+    
+    // If it's a specialized article request
+    if (userMessage?.id) {
+      const Model = userMessage.selectedCountry === "in" ? NewsIn : News;
+      const article = await Model.findById(userMessage.id);
+      prompt = `Analyze this article: ${article?.title}\n\nContent: ${article?.content?.substring(0, 5000)}`;
+    }
+
+    const response = await agenticChat(prompt, []);
+    res.json({ reply: response.text });
+  } catch (error) {
+    res.status(500).json({ error: "AI reasoning failed." });
+  }
+});
+
+/**
+ * FUTURE NEWS (Forecast AI Modal)
+ */
+router.post("/futureNews", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+  const userData = verifyToken(token);
+  if (!userData) return res.status(401).json({ message: "Unauthorized" });
+
+  const { userMessage } = req.body;
+  const { id, selectedCountry, targetYear, previousForecast } = userMessage;
+
+  try {
+    const Model = selectedCountry === "in" ? NewsIn : News;
+    const article = await Model.findById(id);
+
+    const prompt = `
+      As a Strategic Forecaster, analyze this news: "${article?.title}".
+      Context: ${article?.content?.substring(0, 4000)}
+      ${previousForecast ? `Previous Forecast for earlier years: ${previousForecast}` : ""}
+      
+      TASK: Predict the geopolitical and tech landscape for the year ${targetYear || 2030} based on this event.
+      Tone: Analytical, futuristic, and highly detailed.
+    `;
+
+    const response = await agenticChat(prompt, []);
+    res.json({ reply: response.text });
+  } catch (error) {
+    res.status(500).json({ error: "Forecasting failed." });
+  }
+});
+
 module.exports = router;
