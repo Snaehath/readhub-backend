@@ -24,7 +24,7 @@ backend/
 ├── models/              # Mongoose Data Schemas
 │   ├── story.js         # Story metadata & aggregate stats
 │   ├── review.js        # Independent Review collection
-│   ├── geminiClient.js  # Dedicated Gemini AI wrapper
+│   ├── aiClient.js      # Unified AI Agent (Gemini + OpenRouter)
 │   └── ...              # News, Books, and User models
 ├── routes/              # Express API Endpoints
 │   ├── story.js         # Story progression & review management

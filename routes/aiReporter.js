@@ -1,189 +1,128 @@
 const express = require("express");
 const router = express.Router();
-const { chatWithGemini } = require("../models/geminiClient");
-const { verifyToken } = require("../helper/authJwt");
+const { agenticChat } = require("../models/aiClient");
+const { getRelavantContext } = require("../helper/vectorSearch");
+const { batchScrape } = require("../helper/scraperAgent");
 const AiNews = require("../models/aiNews");
-const News = require("../models/news");
-const NewsIn = require("../models/newsIn");
-const PROMPTS = require("../helper/prompts");
+const { verifyToken } = require("../helper/authJwt");
 
-// Get all AI News investigations
-router.get("/all", async (req, res) => {
-  try {
-    const allNews = await AiNews.find({}).sort({ createdAt: -1 });
-    res.status(200).json({
-      message: "AI investigations retrieved",
-      news: allNews,
-    });
-  } catch (err) {
-    console.error("Error fetching AI news:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// Trigger new news investigation (Complete generated news in one go)
+/**
+ * AGENTIC REPORTER V2: Research -> Scrape -> Generate
+ */
 router.post("/trigger", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
 
-  if (!userData) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
+  if (!userData) return res.status(401).json({ message: "Unauthorized" });
 
-  const { suggestion } = req.body;
+  const { topic } = req.body;
+  if (!topic) return res.status(400).json({ message: "Topic is required" });
 
   try {
-    // Look for any existing active investigation (optional, but here we just create a new one every time a suggest is made)
-    // or we can allow one active investigation overall. For simplicity, let's create a new one.
+    console.log(`\n🚀 [AGENTIC REPORTER] Starting investigation for: "${topic}"`);
+
+    // 🕵️‍♂️ PHASE 1: RESEARCH (Vector Search)
+    // We find the top 4 most relevant news items in our database
+    const searchResults = await getRelavantContext(topic, 4);
     
-    console.log("REPORTER: Initializing new global investigation...");
-    
-    let finalSuggestion = suggestion;
-    if (suggestion === "auto") {
-      const yesterday = new Date();
-      yesterday.setHours(yesterday.getHours() - 24);
-      
-      const recentUS = await News.find({ publishedAt: { $gte: yesterday } }).sort({ publishedAt: -1 }).limit(20);
-      
-      const headlines = [...recentUS]
-        .map(n => n.title)
-        .filter(Boolean)
-        .join(" | ");
-        
-      if (!headlines) {
-        // Fallback if no news in last 24h
-        finalSuggestion = "Synthesize a comprehensive global news briefing based on the latest available headlines across all categories.";
-      } else {
-        finalSuggestion = `Generate a compelling and comprehensive news investigation by synthesizing and analyzing all of these top headlines from the past 24 hours: ${headlines}. Identify major themes and provide deep insights.`;
-      }
+    if (searchResults.length === 0) {
+      return res.status(404).json({ message: "No news found in DB to research this topic." });
     }
 
-    // 1. PHASE 1: Initialization (Blueprint)
-    const initPrompt = PROMPTS.aiNewsInit(finalSuggestion);
-    const initRes = await chatWithGemini(initPrompt);
-    
-    let initJson = initRes;
-    const iStart = initRes.indexOf("{");
-    const iEnd = initRes.lastIndexOf("}");
-    if (iStart !== -1 && iEnd !== -1) initJson = initRes.substring(iStart, iEnd + 1);
-    
-    const blueprintData = JSON.parse(initJson);
-    
-    // 2. PHASE 2: Full Content Generation
-    console.log(`REPORTER: Generating full content for "${blueprintData.title}"...`);
-    const reportPrompt = PROMPTS.aiNewsReport(blueprintData, blueprintData.blueprint) + "\n\nIMPORTANT: Do NOT include the article title, any main heading, or bylines like 'Investigative Report by The Deep Analyst' at the beginning of the content. Start directly with the first paragraph or the first sub-heading. The title and author are already handled separately.";
-    const reportRes = await chatWithGemini(reportPrompt);
-    
-    let reportJson = reportRes;
-    const rStart = reportRes.indexOf("{");
-    const rEnd = reportRes.lastIndexOf("}");
-    if (rStart !== -1 && rEnd !== -1) reportJson = reportRes.substring(rStart, rEnd + 1);
-    
-    const contentData = JSON.parse(reportJson);
-    
-    const reporters = ["Vance Sterling", "Sloane Weaver", "Dr. Aris Thorne", "Elena Krix"];
-    const randomAuthor = reporters[Math.floor(Math.random() * reporters.length)];
+    const urls = searchResults.map(art => art.url).filter(Boolean);
+    console.log(`✅ Found ${urls.length} relevant sources in database.`);
 
-    // 3. Save to database
-    const newNews = new AiNews({
+    // 🕵️‍♂️ PHASE 2: SCRAPE (The Scraper Agent)
+    // The agent visits the URLs and grabs the full text
+    console.log("📡 Scraper Agent is visiting the sources...");
+    const fullResearchText = await batchScrape(urls);
+
+    // 🕵️‍♂️ PHASE 3: GENERATE (The Synthesis Agent)
+    console.log("✍️ Synthesis Agent is writing the investigation...");
+    const reportPrompt = `
+      You are the **ReadHub Chief Investigative Analyst**. 
+      Your task is to write a deep, factual, and data-driven investigation into "${topic}".
+      
+      RESEARCH DATA (Extracted from Full-Text Sources):
+      ${fullResearchText}
+      
+      INSTRUCTIONS:
+      1. Use a high-end, sophisticated investigative tone.
+      2. Divide the report into ### Analysis, ### Strategic Impact, and ### The Future.
+      3. Cite sources specifically (e.g., "According to BBC's report on...").
+      4. Use the facts found in the research data. Do not hallucinate.
+      
+      Respond STRICTLY in JSON format:
+      {
+        "title": "A Compelling Investigative Headline",
+        "summary": "2-sentence executive briefing",
+        "content": "Full markdown-formatted report...",
+        "hashtags": ["#Topic", "#Analysis"]
+      }
+    `;
+
+    const agentResponse = await agenticChat(reportPrompt, []);
+    const geminiText = agentResponse.text;
+    
+    // Clean up Gemini's potential markdown wrapping
+    let cleanJson = geminiText;
+    const startIdx = geminiText.indexOf("{");
+    const endIdx = geminiText.lastIndexOf("}");
+    if (startIdx !== -1 && endIdx !== -1) {
+      cleanJson = geminiText.substring(startIdx, endIdx + 1);
+    }
+
+    const finalData = JSON.parse(cleanJson);
+
+    // 🕵️‍♂️ PHASE 4: ARCHIVE
+    const newInvestigation = new AiNews({
       userId: userData.userId,
-      title: blueprintData.title,
-      topic: blueprintData.topic,
-      summary: blueprintData.summary,
-      authorName: randomAuthor,
-      category: blueprintData.category || "General",
-      hashtags: blueprintData.hashtags || [],
-      content: contentData.content,
-      isCompleted: true,
+      title: finalData.title,
+      topic: topic,
+      summary: finalData.summary,
+      content: finalData.content,
+      hashtags: finalData.hashtags,
+      researchData: fullResearchText.substring(0, 10000), // Store sample of research
+      sources: searchResults.map(s => ({
+        title: s.title,
+        url: s.url,
+        sourceName: s.source?.name
+      }))
     });
 
-    await newNews.save();
-    res.status(201).json({ message: "AI Investigation Complete!", news: newNews });
-  } catch (err) {
-    console.error("AI Reporter Generation Error:", err);
-    res.status(500).json({ error: "Failed to generate AI investigation" });
+    await newInvestigation.save();
+
+    console.log("🏆 Investigation Complete and Saved!\n");
+    res.status(201).json({ 
+      message: "Agentic Investigation Complete", 
+      news: newInvestigation 
+    });
+
+  } catch (error) {
+    console.error("Agentic Reporter Error:", error);
+    res.status(500).json({ error: "Failed to perform agentic research investigation." });
   }
 });
 
-// Get individual news by ID
+// Get all investigations
+router.get("/all", async (req, res) => {
+  try {
+    const reports = await AiNews.find().sort({ createdAt: -1 });
+    res.json({ news: reports });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch investigations" });
+  }
+});
+
+// Get single investigation
 router.get("/:id", async (req, res) => {
   try {
-    const news = await AiNews.findById(req.params.id);
-    if (!news) {
-      return res.status(404).json({ message: "Investigation not found" });
-    }
-    res.status(200).json({
-      message: "Investigation retrieved successfully",
-      news: news,
-    });
-  } catch (err) {
-    console.error("Error fetching AI news by ID:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// Update AI news rating and review
-router.patch("/:id/review", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(" ")[1];
-  const userData = verifyToken(token);
-
-  if (!userData) {
-    return res.status(401).json({ message: "Unauthorized: Invalid or missing token" });
-  }
-
-  const { rating, review, reviewerName } = req.body;
-
-  if (rating !== undefined && (typeof rating !== "number" || rating < 1 || rating > 5)) {
-    return res.status(400).json({ error: "Rating must be a number between 1 and 5." });
-  }
-
-  try {
-    const news = await AiNews.findById(req.params.id);
-    if (!news) {
-      return res.status(404).json({ error: "Investigation not found." });
-    }
-
-    // Add review to array
-    news.reviews.push({
-      userId: userData.userId,
-      reviewerName: reviewerName || userData.username || "Anonymous",
-      rating: rating,
-      review: review,
-      createdAt: new Date(),
-    });
-
-    // Update aggregates
-    news.reviewCount += 1;
-    news.ratingSum += rating;
-    await news.save();
-
-    res.status(200).json({ 
-      message: "Feedback submitted successfully", 
-      news: news,
-      review: news.reviews[news.reviews.length - 1]
-    });
-  } catch (err) {
-    console.error("Error updating AI news review:", err);
-    res.status(500).json({ error: "Internal server error while updating your review." });
-  }
-});
-
-// Get individual reviews for AI News
-router.get("/:id/reviews", async (req, res) => {
-  try {
-    const news = await AiNews.findById(req.params.id);
-    if (!news) {
-       return res.status(404).json({ error: "Investigation not found." });
-    }
-    res.status(200).json({ 
-      message: "Reviews retrieved successfully", 
-      reviews: news.reviews 
-    });
-  } catch (err) {
-    console.error("Error fetching AI news reviews:", err);
-    res.status(500).json({ error: "Internal server error while fetching reviews." });
+    const report = await AiNews.findById(req.params.id);
+    if (!report) return res.status(404).json({ message: "Not found" });
+    res.json({ news: report });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch investigation" });
   }
 });
 

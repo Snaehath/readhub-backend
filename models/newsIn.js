@@ -12,6 +12,10 @@ const NewsSchema = new mongoose.Schema({
   source: {
     name: String,
   },
+  embedding:{
+    type: [Number],
+    default: []
+  }
 });
 
 NewsSchema.plugin(mongoosePaginate);
