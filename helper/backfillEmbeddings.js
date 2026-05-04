@@ -26,7 +26,9 @@ const backfillEmbeddings = async () => {
             { embedding: { $exists: false } }, 
             { embedding: { $size: 0 } }
           ],
-        }).limit(20);
+        })
+        .sort({ publishedAt: -1 })
+        .limit(20);
 
         if (articles.length === 0) {
           console.log(`✅ All ${Collection.modelName} articles are vectorized.`);

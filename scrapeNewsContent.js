@@ -29,8 +29,8 @@ const scrapeNewsContent = async () => {
             { content: /\[Content unavailable/ } 
           ],
         })
-        .sort({ publishedAt: -1 }) // Start with newest
-        .limit(10);
+        .sort({ publishedAt: -1 }) // 🎯 TARGET: Latest intelligence first
+        .limit(25);
 
         if (articles.length === 0) {
           console.log(`✅ All ${Collection.modelName} articles have content.`);
@@ -38,11 +38,10 @@ const scrapeNewsContent = async () => {
           continue;
         }
 
-        console.log(`📡 Scraping batch of ${articles.length} articles...`);
+        console.log(`📡 Scraping Elite 25 latest for ${Collection.modelName}...`);
 
         for (const article of articles) {
           try {
-            console.log(`🔍 Scraping: ${article.title.substring(0, 50)}...`);
             const fullContent = await scrapeUrl(article.url);
 
             if (fullContent && !fullContent.includes("[Content unavailable")) {
@@ -50,12 +49,8 @@ const scrapeNewsContent = async () => {
                 $set: { content: fullContent }
               });
               totalScraped++;
-              console.log(`✅ Saved content for "${article.title.substring(0, 30)}"`);
-            } else {
-              console.log(`⚠️ Skip: Content unavailable for URL.`);
             }
             
-            // Subtle delay to avoid getting blocked
             await new Promise(r => setTimeout(r, 1000));
             
           } catch (error) {
@@ -65,9 +60,8 @@ const scrapeNewsContent = async () => {
         
         console.log(`📈 Progress: ${totalScraped} articles scraped in ${Collection.modelName}...`);
         
-        // Stop after a reasonable amount to avoid Render timeouts or IP bans
-        if (totalScraped >= 100) {
-            console.log("🛑 Limit reached for this run (100 articles). Stopping to be safe.");
+        // 🎯 GUARDRAIL: Only scrape the Top 25 per run to match embedding limits
+        if (totalScraped >= 25) {
             hasMore = false;
         }
       }
