@@ -78,6 +78,14 @@ router.get("/fetch-categories/us", async (req, res) => {
       allSavedArticles = allSavedArticles.concat(savedArticles);
     }
     processBackgroundEmbeddings(allSavedArticles); // Start background embedding process
+    
+    // 🧹 ROLLING ARCHIVE: Keep only top 50 latest articles for US
+    const latestArticles = await News.find().sort({ publishedAt: -1 }).limit(50);
+    if (latestArticles.length === 50) {
+      const oldestToKeep = latestArticles[latestArticles.length - 1].publishedAt;
+      await News.deleteMany({ publishedAt: { $lt: oldestToKeep } });
+      console.log("🧹 Pruned US news to keep Top 50 latest.");
+    }
 
     res.status(200).json({
       message: `Fetched and saved articles for categories: ${categories.join(
@@ -178,6 +186,15 @@ router.get("/fetch-categories/in", async (req, res) => {
     }
 
     processBackgroundEmbeddings(allSavedArticles); // Start background embedding process
+    
+    // 🧹 ROLLING ARCHIVE: Keep only top 50 latest articles for India
+    const latestInArticles = await NewsIn.find().sort({ publishedAt: -1 }).limit(50);
+    if (latestInArticles.length === 50) {
+      const oldestToKeep = latestInArticles[latestInArticles.length - 1].publishedAt;
+      await NewsIn.deleteMany({ publishedAt: { $lt: oldestToKeep } });
+      console.log("🧹 Pruned India news to keep Top 50 latest.");
+    }
+
     res.status(200).json({
       message: `Fetched and saved articles for categories: ${allFetchedData.map((d) => d.category).join(", ")}`,
     });

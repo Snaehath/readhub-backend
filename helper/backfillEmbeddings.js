@@ -66,4 +66,38 @@ if (require.main === module) {
   backfillEmbeddings();
 }
 
-module.exports = { backfillEmbeddings };
+const processBackgroundEmbeddings = async (newArticles = []) => {
+  // Fire and forget background process
+  setImmediate(async () => {
+    try {
+      const collections = [News, NewsIn];
+      for (const Collection of collections) {
+        // 🎯 LIMIT: Only embed the top 25 latest articles that lack embeddings
+        const articles = await Collection.find({
+          $or: [{ embedding: { $exists: false } }, { embedding: { $size: 0 } }]
+        })
+        .sort({ publishedAt: -1 })
+        .limit(25);
+
+        if (articles.length > 0) {
+          console.log(`📡 Background Vectorizing Top 25 latest for ${Collection.modelName}...`);
+          for (const article of articles) {
+            try {
+              const textToEmbed = `${article.title} ${article.description || ""} ${article.content || ""}`;
+              const embedding = await generateEmbedding(textToEmbed, "passage");
+              if (embedding) {
+                await Collection.findByIdAndUpdate(article._id, { $set: { embedding: embedding } });
+              }
+            } catch (err) {
+              console.error(`❌ BG Vector Error [${article.title}]:`, err.message);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("🔥 Background Embedding Sweep Error:", error);
+    }
+  });
+};
+
+module.exports = { backfillEmbeddings, processBackgroundEmbeddings };
