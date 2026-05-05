@@ -12,9 +12,7 @@ const axios = require("axios");
 
 const getOpenRouterKey = () => process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER;
 
-/**
- * THE UNIFIED INTELLIGENCE HUB V10
- */
+// Main investigative streaming engine
 router.get("/chat-stream", async (req, res) => {
   const { userMessage, token: queryToken, sessionId } = req.query; 
   const authHeader = req.headers.authorization;
@@ -23,14 +21,13 @@ router.get("/chat-stream", async (req, res) => {
 
   if (!userData) return res.status(401).json({ message: "Unauthorized" });
 
-  // 1. Setup SSE Headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
   const pipeline = new AgentEventPipeline(res);
-  pipeline.startHeartbeat(); // 💓 Keep Render alive
+  pipeline.startHeartbeat(); // Keep Render connection alive
   const startTime = Date.now();
 
   try {
@@ -44,7 +41,6 @@ router.get("/chat-stream", async (req, res) => {
     }
     
     const sessionHistory = session.messages.slice(-10);
-
     const allSources = new Set();
     let turns = 0;
     const maxTurns = 3;
@@ -56,7 +52,6 @@ router.get("/chat-stream", async (req, res) => {
 
     while (turns < maxTurns && !isFinished) {
       pipeline.status(turns === 0 ? "Analyzing request strategy..." : `Refining turn ${turns + 1} strategy...`);
-      
       const agentResponse = await agenticChat(currentPrompt, currentHistory);
 
       if (agentResponse.thoughts && agentResponse.thoughts.length > 0) {
@@ -69,52 +64,37 @@ router.get("/chat-stream", async (req, res) => {
       if (agentResponse.type === "tool_call") {
         turns++;
         const { functionName, args } = agentResponse;
-        
         pipeline.toolCall(functionName, args);
-        thoughts.push(`🛠️ Action (Turn ${turns}): Invoking ${functionName}...`);
+        thoughts.push(`🛠️ Action: Invoking ${functionName}...`);
 
         const searchResults = await getRelavantContext(args.query, 3);
-        
         pipeline.status(`Scraping ${searchResults.length} identified sources...`);
+        
         const scrapedResults = await Promise.all(searchResults.map(async (article) => {
           if (article.url) allSources.add(article.url);
           const fullContent = await scrapeUrl(article.url);
           if (fullContent && !fullContent.includes("[Content unavailable")) {
             const Model = article.sourceRegion === "US" ? News : NewsIn;
-            // 🧠 SELF-HEALING: Update content AND Re-calculate Embedding
             const embedding = await generateEmbedding(fullContent);
-            await Model.findByIdAndUpdate(article._id, { 
-              content: fullContent,
-              embedding: embedding || article.embedding 
-            });
+            await Model.findByIdAndUpdate(article._id, { content: fullContent, embedding: embedding || article.embedding });
           }
           return { ...article, fullContent };
         }));
 
         pipeline.toolResult(functionName, `Retrieved ${scrapedResults.length} detailed articles`);
-        
-        const toolResult = scrapedResults.map(s => 
-          `Source [${s.sourceRegion}]: ${s.title}\nContent: ${s.fullContent.substring(0, 5000)}`
-        ).join("\n\n---\n\n");
+        const toolResult = scrapedResults.map(s => `Source [${s.sourceRegion}]: ${s.title}\nContent: ${s.fullContent.substring(0, 5000)}`).join("\n\n---\n\n");
 
-        thoughts.push(`📝 Observation: Retrieved ${scrapedResults.length} deep-structure articles.`);
+        thoughts.push(`📝 Observation: Retrieved ${scrapedResults.length} articles.`);
         currentHistory.push({ sender: "user", message: currentPrompt });
-        currentHistory.push({ 
-          sender: "bot", 
-          message: `Turn ${turns} complete.`, 
-          thoughts: [`Investigated ${args.query}`] 
-        });
-
+        currentHistory.push({ sender: "bot", message: `Turn ${turns} complete.`, thoughts: [`Investigated ${args.query}`] });
         currentPrompt = `System: Research results for "${args.query}": ${toolResult}. Continue or synthesize.`;
       } else {
-        pipeline.status("Cross-referencing retrieved data and validating facts...");
-        await new Promise(r => setTimeout(r, 1000)); // UX visibility for validation
+        pipeline.status("Cross-referencing data and validating facts...");
+        await new Promise(r => setTimeout(r, 1000));
         
         const sources = Array.from(allSources);
         if (sources.length > 0) {
-          pipeline.emitEvent('sources', `Validation complete. Cross-referenced ${sources.length} sources.`, { 
-            sources: sources 
-          });
+          pipeline.emitEvent('sources', `Validation complete. Cross-referenced ${sources.length} sources.`, { sources: sources });
         }
 
         pipeline.status("Synthesizing final investigative report...");
@@ -124,28 +104,19 @@ router.get("/chat-stream", async (req, res) => {
     }
 
     if (!finalReply) finalReply = "Research complete. Based on my findings...";
-
     const latency = ((Date.now() - startTime) / 1000).toFixed(1);
     const finalSources = Array.from(allSources);
 
-    // Save to Cloud (Session-Specific)
     const sessionIndex = user.sessions.findIndex(s => s.sessionId === activeSessionId);
     if (sessionIndex !== -1) {
       user.sessions[sessionIndex].messages.push(
         { sender: "user", message: userMessage },
-        { 
-          sender: "bot", 
-          message: finalReply, 
-          thoughts: thoughts, 
-          latency: latency,
-          events: [{ type: 'status', message: 'Sources Checked', sources: finalSources }]
-        }
+        { sender: "bot", message: finalReply, thoughts, latency, events: [{ type: 'status', message: 'Sources Checked', sources: finalSources }] }
       );
       user.sessions[sessionIndex].updatedAt = new Date();
       await user.save();
     }
 
-    // Send Final Event
     pipeline.final(finalReply, thoughts, latency);
     pipeline.stopHeartbeat();
     res.end();
@@ -158,8 +129,7 @@ router.get("/chat-stream", async (req, res) => {
   }
 });
 
-// (History and Delete routes)
-// --- 📚 SESSION MANAGEMENT ---
+// Fetch all sessions for user
 router.get("/history", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
@@ -174,13 +144,13 @@ router.get("/history", async (req, res) => {
       updatedAt: s.updatedAt,
       messageCount: s.messages.length
     })).sort((a, b) => b.updatedAt - a.updatedAt);
-    
     res.json({ sessions: sessionList });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch session history." });
   }
 });
 
+// Fetch specific session details
 router.get("/history/:sessionId", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
@@ -196,23 +166,23 @@ router.get("/history/:sessionId", async (req, res) => {
   }
 });
 
-router.delete("/history/:sessionId", async (req, res) => {
+// Delete specific session
+router.get("/delete-history/:sessionId", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
   if (!userData) return res.status(401).json({ message: "Unauthorized" });
 
   try {
-    await User.findByIdAndUpdate(userData.userId, {
-      $pull: { sessions: { sessionId: req.params.sessionId } }
-    });
+    await User.findByIdAndUpdate(userData.userId, { $pull: { sessions: { sessionId: req.params.sessionId } } });
     res.json({ message: "Session deleted." });
   } catch (error) {
     res.status(500).json({ error: "Failed to delete session." });
   }
 });
 
-router.delete("/history", async (req, res) => {
+// Clear all history
+router.get("/clear-history", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
@@ -226,9 +196,7 @@ router.delete("/history", async (req, res) => {
   }
 });
 
-/**
- * ONE-OFF CHAT (Ask AI Modal)
- */
+// One-off chat for Ask AI Modal
 router.post("/chat", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
@@ -236,17 +204,13 @@ router.post("/chat", async (req, res) => {
   if (!userData) return res.status(401).json({ message: "Unauthorized" });
 
   const { userMessage } = req.body;
-  
   try {
     let prompt = typeof userMessage === 'string' ? userMessage : "";
-    
-    // If it's a specialized article request
     if (userMessage?.id) {
       const Model = userMessage.selectedCountry === "in" ? NewsIn : News;
       const article = await Model.findById(userMessage.id);
       prompt = `Analyze this article: ${article?.title}\n\nContent: ${article?.content?.substring(0, 5000)}`;
     }
-
     const response = await agenticChat(prompt, []);
     res.json({ reply: response.text });
   } catch (error) {
@@ -254,9 +218,7 @@ router.post("/chat", async (req, res) => {
   }
 });
 
-/**
- * FUTURE NEWS (Forecast AI Modal)
- */
+// Forecast AI Modal
 router.post("/futureNews", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
@@ -269,16 +231,7 @@ router.post("/futureNews", async (req, res) => {
   try {
     const Model = selectedCountry === "in" ? NewsIn : News;
     const article = await Model.findById(id);
-
-    const prompt = `
-      As a Strategic Forecaster, analyze this news: "${article?.title}".
-      Context: ${article?.content?.substring(0, 4000)}
-      ${previousForecast ? `Previous Forecast for earlier years: ${previousForecast}` : ""}
-      
-      TASK: Predict the geopolitical and tech landscape for the year ${targetYear || 2030} based on this event.
-      Tone: Analytical, futuristic, and highly detailed.
-    `;
-
+    const prompt = `As a Strategic Forecaster, analyze: "${article?.title}".\nContext: ${article?.content?.substring(0, 4000)}\n${previousForecast ? `Previous Forecast: ${previousForecast}` : ""}\nTASK: Predict the landscape for ${targetYear || 2030}.`;
     const response = await agenticChat(prompt, []);
     res.json({ reply: response.text });
   } catch (error) {
