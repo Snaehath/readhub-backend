@@ -1,6 +1,7 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
 
+// Scrape full-text content from a URL
 async function scrapeUrl(url) {
   try {
     const response = await axios.get(url, {
@@ -15,30 +16,25 @@ async function scrapeUrl(url) {
     });
 
     const $ = cheerio.load(response.data);
-
-    // Remove noise (scripts, ads, nav, footer)
     $("script, style, nav, footer, header, ads, iframe, .ads, .sidebar").remove();
 
-    // Heuristic: Targeted common news containers
     const content = $("article, .article-body, .article-content, .post-content, #article-body, main")
       .first()
       .text()
       .trim() || $("body").text().trim();
 
-    // Clean up excessive whitespace
-    return content.replace(/\s+/g, " ").substring(0, 15000); // Limit to 15k chars for token safety
+    return content.replace(/\s+/g, " ").substring(0, 15000);
 
   } catch (error) {
-    console.error(`Scraper Error [${url}]:`, error.message);
-    return `[Content unavailable for ${url} - Error: ${error.message}]`;
+    const code = error.response?.status || error.code || "Unknown";
+    console.error(`❌ Cannot scrape [${url}] - [${code}] - ${error.message.substring(0, 50)}`);
+    return `[Content unavailable for ${url} - Error: ${code}]`;
   }
 }
 
-/**
- * BATCH SCRAPER
- */
+// Scrape multiple URLs in parallel
 async function batchScrape(urls) {
-  console.log(`📡 Agentic Scraper: Investigating ${urls.length} URLs...`);
+  console.log(`📡 Investigating ${urls.length} sources...`);
   const results = await Promise.all(urls.map(url => scrapeUrl(url)));
   return results.join("\n\n---\n\n");
 }
