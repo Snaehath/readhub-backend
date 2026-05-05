@@ -11,7 +11,74 @@ const httpsAgent = new https.Agent({ family: 4 });
 const router = express.Router();
 
 // Fetch and save news from GNewsAPI
-// Redundant manual fetch routes removed. Use /fetch-categories/... instead.
+router.get("/fetch/us", async (req, res) => {
+  try {
+    const response = await axios.get(
+      `https://newsapi.org/v2/top-headlines?country=us&pageSize=40&apiKey=${process.env.NEWS_API_KEY}`,
+    );
+
+    const articles = response.data.articles.filter((a) => a.description);
+
+    const savedArticles = await Promise.all(
+      articles.map(async (article) => {
+        const existing = await News.findOne({ title: article.title });
+        if (!existing) {
+          const saved = await News.create({
+            title: article.title,
+            description: article.description,
+            content: article.content,
+            url: article.url,
+            urlToImage: article.urlToImage,
+            publishedAt: article.publishedAt,
+            source: article.source,
+          });
+          return saved;
+        }
+        return null;
+      }),
+    );
+
+    res.status(200).json({ message: "Fetched and saved news." });
+  } catch (err) {
+    console.error("Error fetching news:", err.message);
+    res.status(500).json({ error: "Failed to fetch news" });
+  }
+});
+
+// Fetch and save news from GNewsAPI
+router.get("/fetch/in", async (req, res) => {
+  try {
+    const response = await axios.get(
+      `https://gnews.io/api/v4/top-headlines?lang=en&category=general&max=10&apikey=${process.env.GNEWS_API_KEY}`,
+    );
+
+    const articles = response.data.articles.filter((a) => a.description);
+
+    const savedArticles = await Promise.all(
+      articles.map(async (article) => {
+        const existing = await NewsIn.findOne({ title: article.title });
+        if (!existing) {
+          const saved = await NewsIn.create({
+            title: article.title,
+            description: article.description,
+            content: article.content,
+            url: article.url,
+            urlToImage: article.image,
+            publishedAt: article.publishedAt,
+            source: article.source,
+          });
+          return saved;
+        }
+        return null;
+      }),
+    );
+
+    res.status(200).json({ message: "Fetched and saved news." });
+  } catch (err) {
+    console.error("Error fetching news:", err.message);
+    res.status(500).json({ error: "Failed to fetch news" });
+  }
+});
 
 // Fetch multiple categories and save in DB
 router.get("/fetch-categories/us", async (req, res) => {

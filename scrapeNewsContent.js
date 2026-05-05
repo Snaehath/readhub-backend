@@ -45,12 +45,16 @@ const scrapeNewsContent = async () => {
               $set: { content: fullContent }
             });
             totalScraped++;
+            console.log(`✅ Scraped: ${article.title.substring(0, 40)}...`);
+          } else {
+            console.log(`⚠️ Skip: Content unavailable for "${article.title.substring(0, 30)}..." - Moving to next.`);
           }
           
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 1000)); // Rate limiting delay
           
         } catch (error) {
-          console.error(`❌ Error scraping "${article.title}":`, error.message);
+          console.error(`❌ Resilience Skip: Failed to process "${article.title.substring(0, 30)}" -> ${error.message}`);
+          continue; // Explicitly move to next article
         }
       }
       
