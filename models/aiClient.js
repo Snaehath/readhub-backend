@@ -7,10 +7,15 @@ const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
 const getOpenRouterKey = () =>
   process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER;
 
+const EMBEDDINGS_PAUSED = true; // Set to false to resume embedding process
+
 /**
  * 🛰️ NVIDIA EMBEDDING ENGINE
  */
 async function generateEmbedding(text, type = "query") {
+  if (EMBEDDINGS_PAUSED) {
+    return null;
+  }
   if (!text || typeof text !== "string") {
     console.warn("NVIDIA Embedding Warning: Invalid or missing text input.");
     return null;

@@ -6,8 +6,13 @@ const { generateEmbedding } = require("../models/aiClient");
 
 const mongodbURI = process.env.MONGO_URI;
 
+const EMBEDDINGS_PAUSED = true; // Set to false to resume embedding process
+
 // Background vectorizer for new news articles
 const processBackgroundEmbeddings = async (newArticles = []) => {
+  if (EMBEDDINGS_PAUSED) {
+    return;
+  }
   setImmediate(async () => {
     try {
       const collections = [News, NewsIn];
