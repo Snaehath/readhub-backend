@@ -1,5 +1,14 @@
 require("dotenv").config();
 
+const dns = require("node:dns");
+const mongoDnsServers = (process.env.MONGODB_DNS_SERVERS || "")
+  .split(",")
+  .map((server) => server.trim())
+  .filter(Boolean);
+if (mongoDnsServers.length > 0) {
+  dns.setServers(mongoDnsServers);
+}
+
 const requiredEnv = ["MONGO_URI", "JWT_SECRET"];
 const missingEnv = requiredEnv.filter((name) => !process.env[name]?.trim());
 if (missingEnv.length > 0) {
@@ -160,6 +169,9 @@ async function startServer() {
 }
 
 startServer().catch((err) => {
-  console.error("Backend startup failed:", err.name || "Error");
+  const message = String(err.message || "Unknown startup error")
+    .replace(/mongodb(?:\+srv)?:\/\/[^@\s]+@/gi, "mongodb+srv://[redacted]@");
+  const code = err.code ? ` (${err.code})` : "";
+  console.error(`Backend startup failed${code}: ${message}`);
   process.exitCode = 1;
 });
