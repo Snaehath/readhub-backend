@@ -4,13 +4,29 @@ const https = require("https");
 const News = require("../models/news");
 const NewsIn = require("../models/newsIn");
 const { processBackgroundEmbeddings } = require("../helper/backfillEmbeddings");
+const { verifyToken } = require("../helper/authJwt");
 
 // Force IPv4 for Render
 const httpsAgent = new https.Agent({ family: 4 });
 const router = express.Router();
 
+const requireAdmin = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const [scheme, token] = authHeader?.split(" ") || [];
+  const userData = scheme === "Bearer" ? verifyToken(token) : null;
+
+  if (!userData) {
+    return res.status(401).json({ error: "Authentication required." });
+  }
+  if (userData.role !== "admin") {
+    return res.status(403).json({ error: "Admins only." });
+  }
+
+  next();
+};
+
 // Fetch US news from NewsAPI
-router.get("/fetch/us", async (req, res) => {
+router.post("/fetch/us", requireAdmin, async (req, res) => {
   try {
     const response = await axios.get(`https://newsapi.org/v2/top-headlines?country=us&pageSize=40&apiKey=${process.env.NEWS_API_KEY}`);
     const articles = response.data.articles.filter((a) => a.description);
@@ -34,7 +50,7 @@ router.get("/fetch/us", async (req, res) => {
 });
 
 // Fetch India news from GNews
-router.get("/fetch/in", async (req, res) => {
+router.post("/fetch/in", requireAdmin, async (req, res) => {
   try {
     const response = await axios.get(`https://gnews.io/api/v4/top-headlines?lang=en&category=general&max=10&apikey=${process.env.GNEWS_API_KEY}`);
     const articles = response.data.articles.filter((a) => a.description);
@@ -58,7 +74,7 @@ router.get("/fetch/in", async (req, res) => {
 });
 
 // Fetch US news categories and prune to top 50
-router.get("/fetch-categories/us", async (req, res) => {
+router.post("/fetch-categories/us", requireAdmin, async (req, res) => {
   try {
     const categories = ["technology", "science", "health", "sports", "business", "entertainment", "politics"];
     const fetchPromises = categories.map((category) =>
@@ -92,7 +108,7 @@ router.get("/fetch-categories/us", async (req, res) => {
 });
 
 // Fetch India news categories and prune to top 50
-router.get("/fetch-categories/in", async (req, res) => {
+router.post("/fetch-categories/in", requireAdmin, async (req, res) => {
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   try {
     const categories = ["technology", "science", "health", "sports", "business", "entertainment", "politics"];
@@ -193,7 +209,7 @@ router.get("/search/in", async (req, res) => {
 });
 
 // Delete US news for today (adjusted)
-router.delete("/delete-today/us", async (req, res) => {
+router.delete("/delete-today/us", requireAdmin, async (req, res) => {
   try {
     const now = new Date();
     const istAdjustedDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -207,7 +223,7 @@ router.delete("/delete-today/us", async (req, res) => {
 });
 
 // Delete India news for today (IST)
-router.delete("/delete-today/in", async (req, res) => {
+router.delete("/delete-today/in", requireAdmin, async (req, res) => {
   try {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
