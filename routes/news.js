@@ -3,7 +3,6 @@ const httpClient = require("../helper/httpClient");
 const https = require("https");
 const News = require("../models/news");
 const NewsIn = require("../models/newsIn");
-const { processBackgroundEmbeddings } = require("../helper/backfillEmbeddings");
 const { requireAdmin } = require("../helper/authMiddleware");
 
 // Force IPv4 for Render
@@ -102,18 +101,15 @@ router.post("/fetch-categories/us", requireAdmin, async (req, res) => {
     );
 
     const allFetchedData = await Promise.all(fetchPromises);
-    let allSavedArticles = [];
 
     for (const { category, articles } of allFetchedData) {
-      const saved = await Promise.all(articles.map(async (article) => 
+      await Promise.all(articles.map(async (article) =>
         News.findOneAndUpdate({ title: article.title }, {
           $setOnInsert: { title: article.title, description: article.description, content: article.content, url: article.url, urlToImage: article.urlToImage, publishedAt: article.publishedAt, source: article.source },
           $addToSet: { category }
         }, { upsert: true, new: true })
       ));
-      allSavedArticles = allSavedArticles.concat(saved);
     }
-    processBackgroundEmbeddings(allSavedArticles);
 
     // Keep only top 50 latest US articles
     const latest = await News.find().sort({ publishedAt: -1 }).limit(50);
@@ -148,9 +144,8 @@ router.post("/fetch-categories/in", requireAdmin, async (req, res) => {
       }
     }
 
-    let allSavedArticles = [];
     for (const { category, articles } of allFetchedData) {
-      const saved = await Promise.all(articles.map(async (article) => {
+      await Promise.all(articles.map(async (article) => {
         try {
           return await NewsIn.findOneAndUpdate({ title: article.title }, {
             $setOnInsert: { title: article.title, description: article.description, content: article.content, url: article.url, urlToImage: article.image, publishedAt: article.publishedAt, source: article.source },
@@ -158,9 +153,7 @@ router.post("/fetch-categories/in", requireAdmin, async (req, res) => {
           }, { upsert: true, new: true });
         } catch (e) { return null; }
       }));
-      allSavedArticles = allSavedArticles.concat(saved.filter(Boolean));
     }
-    processBackgroundEmbeddings(allSavedArticles);
 
     // Keep only top 50 latest India articles
     const latestIn = await NewsIn.find().sort({ publishedAt: -1 }).limit(50);

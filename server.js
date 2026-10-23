@@ -1,12 +1,21 @@
 require("dotenv").config();
 
-const requiredEnv = ["MONGO_URI", "JWT_SECRET", "GEMINI_API_KEY"];
+const requiredEnv = ["MONGO_URI", "JWT_SECRET"];
 const missingEnv = requiredEnv.filter((name) => !process.env[name]?.trim());
 if (missingEnv.length > 0) {
   throw new Error(`Missing required environment variables: ${missingEnv.join(", ")}`);
 }
 if (Buffer.byteLength(process.env.JWT_SECRET, "utf8") < 32) {
   throw new Error("JWT_SECRET must be at least 32 bytes long.");
+}
+const hasAiProvider = [
+  process.env.GEMINI_API_KEY,
+  process.env.NVIDIA_API_KEY,
+  process.env.OPENROUTER_API_KEY,
+  process.env.OPEN_ROUTER,
+].some((key) => key?.trim());
+if (!hasAiProvider) {
+  throw new Error("Configure at least one AI provider key: GEMINI_API_KEY, NVIDIA_API_KEY, or OPENROUTER_API_KEY.");
 }
 
 const port = Number(process.env.PORT || 5000);
@@ -28,6 +37,10 @@ const aiReporterRoutes = require("./routes/aiReporter");
 
 const app = express();
 app.disable("x-powered-by");
+// Render's public web service sits behind one trusted load-balancer hop.
+// This lets express-rate-limit use the forwarded client IP without trusting
+// arbitrary proxy chains supplied by the caller.
+app.set("trust proxy", 1);
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 const configuredOrigins = (process.env.FRONTEND_ORIGINS || "")
   .split(",")

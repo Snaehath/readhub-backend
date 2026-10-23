@@ -1,65 +1,61 @@
-
-// 1. OPENAI / OPENROUTER FORMAT
 const openAiTools = [
   {
     type: "function",
     function: {
       name: "research_news_topic",
-      description: "Search local news and scrape full text for investigative research.",
+      description: "Search ReadHub's indexed news and retrieve source material for current or evidence-based questions.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "The topic to search." }
+          query: { type: "string", description: "A concise search query of at most 200 characters." },
         },
-        required: ["query"]
-      }
-    }
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
   },
   {
     type: "function",
     function: {
       name: "recommend_books",
-      description: "Get book recommendations from OpenLibrary based on interest.",
+      description: "Find matching books in ReadHub's book catalog for a requested genre or interest.",
       parameters: {
         type: "object",
         properties: {
-          interest: { type: "string", description: "The genre or topic of interest." }
+          interest: { type: "string", description: "A short genre, topic, or reading preference." },
         },
-        required: ["interest"]
-      }
-    }
-  }
+        required: ["interest"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
-// 2. GEMINI NATIVE FORMAT
 const geminiTools = {
   functionDeclarations: [
     {
       name: "research_news_topic",
-      description: "Search local news and scrape full text for investigative research.",
+      description: "Search ReadHub's indexed news and retrieve source material for current or evidence-based questions.",
       parameters: {
         type: "OBJECT",
         properties: {
-          query: { type: "string", description: "The topic to search." }
+          query: { type: "STRING", description: "A concise search query, up to 200 characters." },
         },
-        required: ["query"]
-      }
+        required: ["query"],
+      },
     },
     {
       name: "recommend_books",
-      description: "Get book recommendations from OpenLibrary based on interest.",
+      description: "Find matching books in ReadHub's book catalog for a requested genre or interest.",
       parameters: {
         type: "OBJECT",
         properties: {
-          interest: { type: "string", description: "The genre or topic of interest." }
+          interest: { type: "STRING", description: "A short genre, topic, or reading preference." },
         },
-        required: ["interest"]
-      }
-    }
+        required: ["interest"],
+      },
+    },
   ],
-  googleSearchRetrieval: {
-    dynamicRetrievalConfig: { mode: "MODE_DYNAMIC", dynamicThreshold: 0.3 }
-  }
 };
 
 module.exports = { openAiTools, geminiTools };

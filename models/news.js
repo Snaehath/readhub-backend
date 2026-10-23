@@ -12,10 +12,6 @@ const NewsSchema = new mongoose.Schema({
   source: {
     id: String,
     name: String,
-  },
-  embedding:{
-    type: [Number],
-    default: []
   }
 });
 

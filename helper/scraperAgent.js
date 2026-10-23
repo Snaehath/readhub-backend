@@ -123,7 +123,9 @@ async function batchScrape(urls) {
   const safeUrls = Array.isArray(urls) ? [...new Set(urls)].slice(0, 5) : [];
   console.log(`Investigating ${safeUrls.length} sources...`);
   const results = await Promise.all(safeUrls.map(url => scrapeUrl(url)));
-  return results.join("\n\n---\n\n");
+  return results.map((content, index) =>
+    `Source ${index + 1}\nURL: ${safeUrls[index]}\nContent: ${content}`,
+  ).join("\n\n---\n\n");
 }
 
 module.exports = { scrapeUrl, batchScrape };

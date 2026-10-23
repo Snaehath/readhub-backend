@@ -13,13 +13,10 @@ We've migrated the core AI assistant to an **Event-Driven Streaming Architecture
 - **Real-Time Hooks**: Emits `status`, `tool_call`, `tool_result`, and `llm_step` events via Server-Sent Events (SSE).
 - **Investigative Console Support**: Sends live activity events to the frontend while an investigation is running.
 
-### 🧠 Self-Healing RAG
+### 🔎 News Research
 
-A dynamic data-enrichment loop that ensures your vector database gets smarter with every query.
-
-- **Deep Scraping**: When the agent identifies a news source, it automatically scrapes the full-text content.
-- **Automated Re-Embedding**: Once full content is retrieved, the system triggers a **NVIDIA NV-Embed-v1** call to re-calculate the vector embedding, optimizing the database for high-fidelity future retrieval.
-- **Source Auditing**: Captures and validates all digital footprints (URLs) encountered during the research phase.
+- **Keyword Retrieval**: Searches saved US and India news by title, description, content, and category.
+- **Source Auditing**: Scrapes matched articles when available and records their URLs in research responses.
 
 ### 🏛️ Multi-Session Intelligence
 
@@ -43,8 +40,8 @@ backend/
 ├── helper/              # Business logic & Utility functions
 │   ├── aiTools.js       # Structured tools for agentic reasoning
 │   ├── eventPipeline.js # SSE emission & event management
-│   ├── scraperAgent.js  # Deep-scraping & RAG healing logic
-│   ├── vectorSearch.js  # MongoDB Vector Search integrations
+│   ├── scraperAgent.js  # News article scraping
+│   ├── newsSearch.js    # Keyword-based news retrieval
 │   └── ...              # Auth & Utils
 ├── models/              # Mongoose Data Schemas
 │   ├── aiClient.js      # Unified Multi-Provider Agent (Gemini + OpenRouter)
@@ -61,9 +58,9 @@ backend/
 
 - **Runtime**: [Node.js](https://nodejs.org/)
 - **Framework**: [Express.js](https://expressjs.com/)
-- **Database**: [MongoDB](https://www.mongodb.com/) (Vector Search & Atlas)
+- **Database**: [MongoDB](https://www.mongodb.com/)
 - **AI Engine**: [Google Gemini](https://ai.google.dev/) & [OpenRouter (Gemma)](https://openrouter.ai/)
-- **Embeddings**: [NVIDIA NV-Embed-v1](https://build.nvidia.com/)
+- **AI failover**: Gemini 3.1 Flash-Lite → Gemini 2.5 Flash-Lite → NVIDIA NIM → OpenRouter
 - **Scraping**: [Cheerio](https://cheerio.js.org/) & [Axios](https://axios-http.com/)
 
 ---
@@ -84,7 +81,9 @@ backend/
    ```
 
 3. **Environment Variables**:
-   Copy `.env.example` to `.env`. `MONGO_URI`, `GEMINI_API_KEY`, and a `JWT_SECRET` of at least 32 bytes are required before the server starts. Set `FRONTEND_ORIGINS` to the exact deployed frontend origin(s), separated by commas. Other provider keys are needed only for the related integration. Keep `.env` private; it is excluded by `.gitignore`.
+   Copy `.env.example` to `.env`. `MONGO_URI`, a `JWT_SECRET` of at least 32 bytes, and at least one of `GEMINI_API_KEY`, `NVIDIA_API_KEY`, or `OPENROUTER_API_KEY` are required. Set `FRONTEND_ORIGINS` to the exact deployed frontend origin(s), separated by commas. Set provider model overrides only when needed. Keep `.env` private; it is excluded by `.gitignore`.
+
+Text generation tries Gemini `gemini-3.1-flash-lite`, then `gemini-2.5-flash-lite`, then NVIDIA NIM (`openai/gpt-oss-20b` by default), and finally OpenRouter (`openrouter/free` by default). The 2.5 Flash-Lite API may be restricted for projects that have not previously used the 2.5 family; the fallback chain will continue if Google rejects it. News research uses keyword retrieval against saved articles.
 
 Authentication uses a short-lived HttpOnly cookie. The frontend should call the backend through its `/api` proxy so the cookie remains first-party. In production, configure the frontend's server-side `BACKEND_API_URL` and this backend's `FRONTEND_ORIGINS`.
 

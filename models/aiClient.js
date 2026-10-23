@@ -1,167 +1,185 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const httpClient = require("../helper/httpClient");
 const { geminiTools, openAiTools } = require("../helper/aiTools");
+const { SYSTEM_PROMPT } = require("../helper/aiPrompts");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
-const getOpenRouterKey = () =>
-  process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER;
+const GEMINI_MODELS = ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite"];
+const NVIDIA_CHAT_MODEL = process.env.NVIDIA_CHAT_MODEL || "openai/gpt-oss-20b";
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || "openrouter/free";
+const MAX_HISTORY_MESSAGES = 8;
+const MAX_HISTORY_CHARS = 2500;
 
-const EMBEDDINGS_PAUSED = true; // Set to false to resume embedding process
-
-/**
- * 🛰️ NVIDIA EMBEDDING ENGINE
- */
-async function generateEmbedding(text, type = "query") {
-  if (EMBEDDINGS_PAUSED) {
-    return null;
+function normalizeHistory(history = []) {
+  const normalized = [];
+  for (const item of Array.isArray(history) ? history : []) {
+    if (!item || typeof item.message !== "string") continue;
+    const role = item.sender === "user" ? "user" : "assistant";
+    const content = item.message.slice(-MAX_HISTORY_CHARS);
+    const previous = normalized[normalized.length - 1];
+    if (previous?.role === role) {
+      previous.content = `${previous.content}\n${content}`.slice(-MAX_HISTORY_CHARS);
+    } else {
+      normalized.push({ role, content });
+    }
   }
-  if (!text || typeof text !== "string") {
-    console.warn("NVIDIA Embedding Warning: Invalid or missing text input.");
-    return null;
-  }
-  try {
-    const response = await httpClient.post(
-      "https://integrate.api.nvidia.com/v1/embeddings",
-      {
-        model: "nvidia/nv-embed-v1",
-        input: [text],
-        input_type: type,
-        encoding_format: "float",
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${NVIDIA_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
-    return response.data.data[0].embedding;
-  } catch (error) {
-    console.error("NVIDIA embedding request failed:", error.response?.status || error.code || "unknown");
-    return null;
-  }
+  return normalized.slice(-MAX_HISTORY_MESSAGES);
 }
 
-/**
- * ⚡ GEMINI NATIVE ENGINE
- */
-async function chatWithGemini(userPrompt, history) {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    tools: [geminiTools],
-    systemInstruction:
-      "You are ReadHub AI, a professional and friendly research assistant. Respond directly and warmly to greetings (like 'Hello', 'Good morning') and general questions about yourself (like 'What can you do?'). ONLY use tools for specific research, news, or investigative queries where you need real-time data.",
-  }, { timeout: 60000 });
-  const formattedHistory = history.map((h) => ({
-    role: h.sender === "user" ? "user" : "model",
-    parts: [{ text: h.message }],
-  }));
+function validateToolCall(name, args) {
+  if (name === "research_news_topic" && typeof args?.query === "string") {
+    return { functionName: name, args: { query: args.query.trim().slice(0, 200) } };
+  }
+  if (name === "recommend_books" && typeof args?.interest === "string") {
+    return { functionName: name, args: { interest: args.interest.trim().slice(0, 120) } };
+  }
+  throw new Error("Provider returned an unsupported tool call.");
+}
 
+function toToolResult(name, args) {
+  const call = validateToolCall(name, args);
+  return { type: "tool_call", ...call };
+}
+
+async function chatWithGemini(modelName, userPrompt, history, allowTools, jsonMode) {
+  const modelConfig = {
+    model: modelName,
+    systemInstruction: SYSTEM_PROMPT,
+  };
+  if (allowTools) modelConfig.tools = [geminiTools];
+  if (jsonMode) modelConfig.generationConfig = { responseMimeType: "application/json" };
+
+  const model = genAI.getGenerativeModel(modelConfig, { timeout: 30000 });
+  const formattedHistory = normalizeHistory(history).map((message) => ({
+    role: message.role === "user" ? "user" : "model",
+    parts: [{ text: message.content }],
+  }));
   const chat = model.startChat({ history: formattedHistory });
   const result = await chat.sendMessage(userPrompt);
   const response = result.response;
-  const calls = response.functionCalls();
+  const call = response.functionCalls()?.[0];
+  if (call) return toToolResult(call.name, call.args);
 
-  if (calls && calls.length > 0) {
-    return {
-      type: "tool_call",
-      functionName: calls[0].name,
-      args: calls[0].args,
-      chatInstance: chat,
-    };
+  const text = response.text();
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("Gemini returned an empty response.");
   }
-
-  return { type: "text", text: response.text() };
+  return { type: "text", text };
 }
 
-/**
- * 🧠 OPENROUTER (GEMMA-4) ENGINE
- */
-async function chatWithOpenRouter(userPrompt, history) {
-  const key = getOpenRouterKey();
-  if (!key) {
-    throw new Error("OpenRouter provider is not configured.");
+function parseOpenAiToolCall(call) {
+  let args;
+  try {
+    args = JSON.parse(call.function.arguments || "{}");
+  } catch (_error) {
+    throw new Error("Provider returned malformed tool arguments.");
   }
+  return toToolResult(call.function.name, args);
+}
 
-  const messages = history.map((h) => ({
-    role: h.sender === "user" ? "user" : "assistant",
-    content: h.message,
-  }));
-  messages.unshift({
-    role: "system",
-    content:
-      "You are ReadHub AI, a professional and friendly research assistant. Respond directly to greetings and general questions without calling tools. ONLY use tools for research or news-related queries.",
-  });
-  messages.push({ role: "user", content: userPrompt });
-
-  const response = await httpClient.post(
-    "https://openrouter.ai/api/v1/chat/completions",
-    {
-      model: "openrouter/free",
-      messages: messages,
-      tools: openAiTools,
-      tool_choice: "auto",
-      include_reasoning: true,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      timeout: 60000,
-    },
-  );
-
-  const choice = response.data.choices[0].message;
-
-  // 1. Standard OpenAI Tool Call
-  if (choice.tool_calls) {
-    const toolCall = choice.tool_calls[0].function;
-    return {
-      type: "tool_call",
-      functionName: toolCall.name,
-      args: JSON.parse(toolCall.arguments),
-      reasoning: choice.reasoning,
-    };
-  }
-
-  // 2. Fallback for Minimax/Other tag-based tool calls (Leaking in free tier)
-  const content = choice.content || "";
-  const minimaxRegex = /(?:<)?minimax:tool_call(?:>)?\s*([\s\S]*?)\s*<\/minimax:tool_call>/i;
-  const match = content.match(minimaxRegex);
-  
-  if (match) {
-    return {
-      type: "tool_call",
-      functionName: "research_news_topic",
-      args: { query: match[1].trim() },
-      thoughts: [
-        content.replace(minimaxRegex, "").substring(0, 500) + "...",
-      ],
-    };
-  }
-
-  return {
-    type: "text",
-    text: choice.content,
-    thoughts: choice.reasoning ? [choice.reasoning] : [],
+async function chatWithOpenAiCompatibleProvider({ provider, endpoint, key, model, userPrompt, history, allowTools, jsonMode }) {
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...normalizeHistory(history),
+    { role: "user", content: userPrompt },
+  ];
+  const payload = {
+    model,
+    messages,
+    max_tokens: 1200,
+    temperature: 0.3,
+    stream: false,
   };
+  if (allowTools) {
+    payload.tools = openAiTools;
+    payload.tool_choice = "auto";
+    payload.parallel_tool_calls = false;
+  }
+  if (jsonMode) payload.response_format = { type: "json_object" };
+
+  const response = await httpClient.post(endpoint, payload, {
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    timeout: 30000,
+  });
+  const message = response.data?.choices?.[0]?.message;
+  if (!message) throw new Error(`${provider} returned an empty response.`);
+  if (message.tool_calls?.length) return parseOpenAiToolCall(message.tool_calls[0]);
+  if (typeof message.content !== "string" || !message.content.trim()) {
+    throw new Error(`${provider} returned an empty response.`);
+  }
+  return { type: "text", text: message.content };
 }
 
-/**
- * 🏛️ UNIFIED AGENTIC CHAT
- */
-async function agenticChat(userPrompt, history = [], provider = "gemini") {
-  if (provider === "gemini") {
-    try {
-      return await chatWithGemini(userPrompt, history);
-    } catch (e) {
-      console.warn("⚠️ Gemini Quota Exhausted. Failing over to OpenRouter...");
-      return await chatWithOpenRouter(userPrompt, history);
+async function chatWithNvidia(userPrompt, history, allowTools, jsonMode) {
+  return chatWithOpenAiCompatibleProvider({
+    provider: "NVIDIA NIM",
+    endpoint: "https://integrate.api.nvidia.com/v1/chat/completions",
+    key: NVIDIA_API_KEY,
+    model: NVIDIA_CHAT_MODEL,
+    userPrompt,
+    history,
+    allowTools,
+    jsonMode,
+  });
+}
+
+async function chatWithOpenRouter(userPrompt, history, allowTools, jsonMode) {
+  return chatWithOpenAiCompatibleProvider({
+    provider: "OpenRouter",
+    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    key: OPENROUTER_API_KEY,
+    model: OPENROUTER_MODEL,
+    userPrompt,
+    history,
+    allowTools,
+    jsonMode,
+  });
+}
+
+function providerCode(error) {
+  return error.response?.status || error.code || error.name || "unknown";
+}
+
+async function agenticChat(userPrompt, history = [], options = {}) {
+  const allowTools = options.tools !== false;
+  const jsonMode = options.jsonMode === true;
+  const providers = [];
+
+  if (process.env.GEMINI_API_KEY?.trim()) {
+    for (const model of GEMINI_MODELS) {
+      providers.push({ name: "Gemini", model, run: () => chatWithGemini(model, userPrompt, history, allowTools, jsonMode) });
     }
   }
-  return await chatWithOpenRouter(userPrompt, history);
+  if (NVIDIA_API_KEY?.trim()) {
+    providers.push({ name: "NVIDIA NIM", model: NVIDIA_CHAT_MODEL, run: () => chatWithNvidia(userPrompt, history, allowTools, jsonMode) });
+  }
+  if (OPENROUTER_API_KEY?.trim()) {
+    providers.push({ name: "OpenRouter", model: OPENROUTER_MODEL, run: () => chatWithOpenRouter(userPrompt, history, allowTools, jsonMode) });
+  }
+
+  if (providers.length === 0) {
+    throw new Error("No text-generation provider is configured.");
+  }
+
+  const failures = [];
+  for (const provider of providers) {
+    try {
+      return await provider.run();
+    } catch (error) {
+      const code = providerCode(error);
+      failures.push(`${provider.name}/${provider.model}:${code}`);
+      console.warn(`${provider.name} model ${provider.model} failed (${code}); trying the next configured provider.`);
+    }
+  }
+
+  const error = new Error(`All configured AI providers failed: ${failures.join(", ")}`);
+  error.code = "AI_PROVIDERS_EXHAUSTED";
+  throw error;
 }
 
-module.exports = { agenticChat, generateEmbedding };
+module.exports = { agenticChat };
