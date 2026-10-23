@@ -25,6 +25,22 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+const getPagination = (query) => {
+  const requestedPage = Number.parseInt(query.page, 10);
+  const requestedLimit = Number.parseInt(query.limit, 10);
+
+  return {
+    page: Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, 10000)
+      : 1,
+    limit: Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 50)
+      : 12,
+  };
+};
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 // Fetch US news from NewsAPI
 router.post("/fetch/us", requireAdmin, async (req, res) => {
   try {
@@ -152,8 +168,7 @@ router.post("/fetch-categories/in", requireAdmin, async (req, res) => {
 
 // Paginated US news
 router.get("/new/pagination", async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 12;
+  const { page, limit } = getPagination(req.query);
   const category = req.query.category;
   try {
     const query = category && category !== "all" ? { category } : {};
@@ -166,8 +181,7 @@ router.get("/new/pagination", async (req, res) => {
 
 // Paginated India news
 router.get("/newIn/pagination", async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 12;
+  const { page, limit } = getPagination(req.query);
   const category = req.query.category;
   try {
     const query = category && category !== "all" ? { category } : {};
@@ -180,11 +194,18 @@ router.get("/newIn/pagination", async (req, res) => {
 
 // Search US news
 router.get("/search/us", async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 12;
+  const { page, limit } = getPagination(req.query);
   const { q, category } = req.query;
+  if (q !== undefined && typeof q !== "string") {
+    return res.status(400).json({ error: "Search query must be a string." });
+  }
+  if (q && q.length > 100) {
+    return res.status(400).json({ error: "Search query must be 100 characters or fewer." });
+  }
   try {
-    let query = q ? { $or: [{ title: { $regex: q, $options: "i" } }, { description: { $regex: q, $options: "i" } }] } : {};
+    const searchTerm = q?.trim();
+    const escapedSearchTerm = searchTerm ? escapeRegex(searchTerm) : "";
+    let query = escapedSearchTerm ? { $or: [{ title: { $regex: escapedSearchTerm, $options: "i" } }, { description: { $regex: escapedSearchTerm, $options: "i" } }] } : {};
     if (category && category !== "all") query.category = category;
     const result = await News.paginate(query, { page, limit, sort: { publishedAt: -1 } });
     res.json({ currentPage: result.page, totalPages: result.totalPages, totalArticles: result.totalDocs, articles: result.docs });
@@ -195,11 +216,18 @@ router.get("/search/us", async (req, res) => {
 
 // Search India news
 router.get("/search/in", async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 12;
+  const { page, limit } = getPagination(req.query);
   const { q, category } = req.query;
+  if (q !== undefined && typeof q !== "string") {
+    return res.status(400).json({ error: "Search query must be a string." });
+  }
+  if (q && q.length > 100) {
+    return res.status(400).json({ error: "Search query must be 100 characters or fewer." });
+  }
   try {
-    let query = q ? { $or: [{ title: { $regex: q, $options: "i" } }, { description: { $regex: q, $options: "i" } }] } : {};
+    const searchTerm = q?.trim();
+    const escapedSearchTerm = searchTerm ? escapeRegex(searchTerm) : "";
+    let query = escapedSearchTerm ? { $or: [{ title: { $regex: escapedSearchTerm, $options: "i" } }, { description: { $regex: escapedSearchTerm, $options: "i" } }] } : {};
     if (category && category !== "all") query.category = category;
     const result = await NewsIn.paginate(query, { page, limit, sort: { publishedAt: -1 } });
     res.json({ currentPage: result.page, totalPages: result.totalPages, totalArticles: result.totalDocs, articles: result.docs });
