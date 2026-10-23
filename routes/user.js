@@ -177,29 +177,9 @@ router.patch("/update-role", async (req, res) => {
 });
 
 router.put("/reset-password", async (req, res) => {
-  try {
-    const { email, newPassword } = req.body;
-
-    if (!email || !newPassword) {
-      return res
-        .status(400)
-        .json({ error: "Email and new password are required." });
-    }
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    // Hash the new password
-    user.passwordhash = await bcrypt.hash(newPassword, 10);
-    await user.save();
-
-    res.status(200).json({ message: "Password reset successfully." });
-  } catch (err) {
-    console.error("Error resetting password:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
+  return res.status(503).json({
+    error: "Password reset is unavailable until email verification is configured.",
+  });
 });
 
 // Get current user details
