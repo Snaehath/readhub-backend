@@ -92,6 +92,7 @@ backend/
    PORT=5000
    MONGO_URI=your_mongodb_connection_string
    JWT_SECRET=your_jwt_secret
+   FRONTEND_ORIGINS=https://readhub-frontend.vercel.app,http://localhost:3000
    GEMINI_API_KEY=your_gemini_key
    NVIDIA_API_KEY=your_nvidia_key
    OPENROUTER_API_KEY=your_openrouter_key

@@ -12,7 +12,26 @@ const storyRoutes = require("./routes/story");
 const aiReporterRoutes = require("./routes/aiReporter");
 
 const app = express();
-app.use(cors());
+const configuredOrigins = (process.env.FRONTEND_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedOrigins = new Set([
+  "https://readhub-frontend.vercel.app",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  ...configuredOrigins,
+]);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      callback(null, !origin || allowedOrigins.has(origin));
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 app.use(express.json());
 const path = require("path");
 app.use(express.static(path.join(__dirname, "public")));
