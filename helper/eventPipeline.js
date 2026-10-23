@@ -46,8 +46,8 @@ class AgentEventPipeline extends EventEmitter {
     this.emitEvent('llm_step', message);
   }
 
-  final(reply, thoughts, latency) {
-    this.emitEvent('final', 'Response ready', { reply, thoughts, latency });
+  final(reply, thoughts, latency, sources = []) {
+    this.emitEvent('final', 'Response ready', { reply, thoughts, latency, sources });
   }
 }
 

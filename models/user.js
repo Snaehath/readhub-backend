@@ -24,6 +24,7 @@ const UserSchema = new mongoose.Schema(
         message: { type: String },
         thoughts: [{ type: String }],
         latency: { type: String },
+        sources: [{ type: Object }],
         events: [{ type: Object }], // Store structured events
         createdAt: { type: Date, default: Date.now }
       }],

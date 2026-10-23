@@ -62,6 +62,7 @@ router.post("/chat-stream", expensiveLimiter, async (req, res) => {
     const maxTurns = 3;
     let currentHistory = [...sessionHistory];
     let finalReply = "";
+    let sourceReferences = [];
     let thoughts = [];
     let isFinished = false;
     let currentPrompt = userMessage;
@@ -131,11 +132,18 @@ router.post("/chat-stream", expensiveLimiter, async (req, res) => {
 
           pipeline.toolResult(functionName, `Retrieved ${scrapedResults.length} sources`);
           currentHistory.push({ sender: "bot", message: `News research returned ${scrapedResults.length} sources.` });
-          const sources = scrapedResults.map((source) => ({
+          const sources = scrapedResults.map((source, index) => ({
+            citationNumber: index + 1,
             title: source.title,
             publisher: source.sourceName,
             url: source.url || "Unavailable",
             text: source.fullContent,
+          }));
+          sourceReferences = sources.map(({ citationNumber, title, publisher, url }) => ({
+            citationNumber,
+            title,
+            publisher,
+            url,
           }));
           currentPrompt = buildResearchPrompt(userMessage, args.query, sources);
           thoughts.push(`News research returned ${scrapedResults.length} sources.`);
@@ -169,13 +177,13 @@ router.post("/chat-stream", expensiveLimiter, async (req, res) => {
     if (sessionIndex !== -1) {
       user.sessions[sessionIndex].messages.push(
         { sender: "user", message: userMessage },
-        { sender: "bot", message: finalReply, thoughts, latency, events: [{ type: 'status', message: 'Sources Checked', sources: finalSources }] }
+        { sender: "bot", message: finalReply, thoughts, latency, sources: sourceReferences, events: [{ type: 'status', message: 'Sources Checked', sources: finalSources }] }
       );
       user.sessions[sessionIndex].updatedAt = new Date();
       await user.save();
     }
 
-    pipeline.final(finalReply, thoughts, latency);
+    pipeline.final(finalReply, thoughts, latency, sourceReferences);
     pipeline.stopHeartbeat();
     res.end();
 
