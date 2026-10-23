@@ -6,7 +6,7 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const JWT_SECRET = process.env.JWT_SECRET;
 const { verifyToken } = require("../helper/authJwt");
-const { requireAdmin } = require("../helper/authMiddleware");
+const { readAuthToken, requireAdmin } = require("../helper/authMiddleware");
 const { authLimiter } = require("../helper/rateLimit");
 const DUMMY_PASSWORD_HASH = "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
@@ -106,10 +106,16 @@ router.post("/login", authLimiter, async (req, res) => {
       { expiresIn: "1d" },
     );
 
-    // Respond with token and user info
+    res.cookie("readhub_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/api",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
     res.status(200).json({
       message: "Login successful",
-      token,
       user: {
         id: user._id,
         email: user.email,
@@ -125,11 +131,19 @@ router.post("/login", authLimiter, async (req, res) => {
   }
 });
 
+router.post("/logout", (_req, res) => {
+  res.clearCookie("readhub_token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/api",
+  });
+  return res.status(204).end();
+});
+
 router.put("/update", async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    const [scheme, token] = authHeader?.split(" ") || [];
-    const decoded = scheme === "Bearer" ? verifyToken(token) : null;
+    const decoded = verifyToken(readAuthToken(req));
 
     if (!decoded) {
       return res.status(401).json({ error: "Unauthorized: Invalid or missing token." });
@@ -211,9 +225,7 @@ router.put("/reset-password", async (req, res) => {
 
 // Get current user details
 router.get("/me", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(" ")[1];
-  const decoded = verifyToken(token);
+  const decoded = verifyToken(readAuthToken(req));
 
   if (!decoded) {
     return res.status(401).json({ error: "Unauthorized: Invalid token." });
@@ -233,9 +245,7 @@ router.get("/me", async (req, res) => {
 
 // Toggle Like
 router.post("/like-news", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(" ")[1];
-  const decoded = verifyToken(token);
+  const decoded = verifyToken(readAuthToken(req));
 
   if (!decoded) {
     return res.status(401).json({ error: "Unauthorized: Invalid token." });
@@ -274,9 +284,7 @@ router.post("/like-news", async (req, res) => {
 
 // Toggle Bookmark
 router.post("/bookmark-news", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(" ")[1];
-  const decoded = verifyToken(token);
+  const decoded = verifyToken(readAuthToken(req));
 
   if (!decoded) {
     return res.status(401).json({ error: "Unauthorized: Invalid token." });

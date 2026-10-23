@@ -1,5 +1,5 @@
 const express = require("express");
-const axios = require("axios");
+const httpClient = require("../helper/httpClient");
 const https = require("https");
 const News = require("../models/news");
 const NewsIn = require("../models/newsIn");
@@ -37,8 +37,11 @@ const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Fetch US news from NewsAPI
 router.post("/fetch/us", requireAdmin, async (req, res) => {
+  if (!process.env.NEWS_API_KEY) return res.status(503).json({ error: "News provider is not configured." });
   try {
-    const response = await axios.get(`https://newsapi.org/v2/top-headlines?country=us&pageSize=40&apiKey=${process.env.NEWS_API_KEY}`);
+    const response = await httpClient.get("https://newsapi.org/v2/top-headlines", {
+      params: { country: "us", pageSize: 40, apiKey: process.env.NEWS_API_KEY },
+    });
     const articles = response.data.articles.filter((a) => a.description);
     await Promise.all(articles.map(async (article) => {
       const existing = await News.findOne({ title: article.title });
@@ -54,15 +57,18 @@ router.post("/fetch/us", requireAdmin, async (req, res) => {
     }));
     res.status(200).json({ message: "Fetched and saved news." });
   } catch (err) {
-    console.error("Error fetching news:", err.message);
+    console.error("NewsAPI request failed:", err.response?.status || err.code || "unknown");
     res.status(500).json({ error: "Failed to fetch news" });
   }
 });
 
 // Fetch India news from GNews
 router.post("/fetch/in", requireAdmin, async (req, res) => {
+  if (!process.env.GNEWS_API_KEY) return res.status(503).json({ error: "News provider is not configured." });
   try {
-    const response = await axios.get(`https://gnews.io/api/v4/top-headlines?lang=en&category=general&max=10&apikey=${process.env.GNEWS_API_KEY}`);
+    const response = await httpClient.get("https://gnews.io/api/v4/top-headlines", {
+      params: { lang: "en", category: "general", max: 10, apikey: process.env.GNEWS_API_KEY },
+    });
     const articles = response.data.articles.filter((a) => a.description);
     await Promise.all(articles.map(async (article) => {
       const existing = await NewsIn.findOne({ title: article.title });
@@ -78,17 +84,20 @@ router.post("/fetch/in", requireAdmin, async (req, res) => {
     }));
     res.status(200).json({ message: "Fetched and saved news." });
   } catch (err) {
-    console.error("Error fetching news:", err.message);
+    console.error("GNews request failed:", err.response?.status || err.code || "unknown");
     res.status(500).json({ error: "Failed to fetch news" });
   }
 });
 
 // Fetch US news categories and prune to top 50
 router.post("/fetch-categories/us", requireAdmin, async (req, res) => {
+  if (!process.env.NEWS_API_KEY) return res.status(503).json({ error: "News provider is not configured." });
   try {
     const categories = ["technology", "science", "health", "sports", "business", "entertainment", "politics"];
     const fetchPromises = categories.map((category) =>
-      axios.get(`https://newsapi.org/v2/top-headlines?category=${category}&pageSize=10&apiKey=${process.env.NEWS_API_KEY}`)
+      httpClient.get("https://newsapi.org/v2/top-headlines", {
+        params: { category, pageSize: 10, apiKey: process.env.NEWS_API_KEY },
+      })
         .then((response) => ({ category, articles: response.data.articles.filter((a) => a.description && a.urlToImage) }))
     );
 
@@ -112,13 +121,14 @@ router.post("/fetch-categories/us", requireAdmin, async (req, res) => {
 
     res.status(200).json({ message: `Fetched categories: ${categories.join(", ")}` });
   } catch (err) {
-    console.error("Error fetching multiple categories:", err.message);
+    console.error("NewsAPI category requests failed:", err.response?.status || err.code || "unknown");
     res.status(500).json({ error: "Failed to fetch multiple categories" });
   }
 });
 
 // Fetch India news categories and prune to top 50
 router.post("/fetch-categories/in", requireAdmin, async (req, res) => {
+  if (!process.env.GNEWS_API_KEY) return res.status(503).json({ error: "News provider is not configured." });
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   try {
     const categories = ["technology", "science", "health", "sports", "business", "entertainment", "politics"];
@@ -127,11 +137,14 @@ router.post("/fetch-categories/in", requireAdmin, async (req, res) => {
     for (const category of categories) {
       try {
         const gnewsCategory = category === "politics" ? "nation" : category;
-        const response = await axios.get(`https://gnews.io/api/v4/top-headlines?country=in&lang=en&category=${gnewsCategory}&max=10&apikey=${process.env.GNEWS_API_KEY}`, { httpsAgent, timeout: 15000 });
+        const response = await httpClient.get("https://gnews.io/api/v4/top-headlines", {
+          httpsAgent,
+          params: { country: "in", lang: "en", category: gnewsCategory, max: 10, apikey: process.env.GNEWS_API_KEY },
+        });
         allFetchedData.push({ category, articles: response.data.articles.filter((a) => a.description) });
         await delay(1200);
       } catch (catErr) {
-        console.error(`Error fetching India category ${category}:`, catErr.message);
+        console.error(`GNews category request failed (${category}):`, catErr.response?.status || catErr.code || "unknown");
       }
     }
 
@@ -155,7 +168,7 @@ router.post("/fetch-categories/in", requireAdmin, async (req, res) => {
 
     res.status(200).json({ message: `Fetched categories: ${allFetchedData.map(d => d.category).join(", ")}` });
   } catch (err) {
-    console.error("Critical error in fetch-categories/in:", err.message);
+    console.error("GNews category requests failed:", err.response?.status || err.code || "unknown");
     res.status(500).json({ error: "Failed to fetch categories" });
   }
 });

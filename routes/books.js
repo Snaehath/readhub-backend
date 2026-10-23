@@ -1,5 +1,5 @@
 const express = require("express");
-const axios = require("axios");
+const httpClient = require("../helper/httpClient");
 const Books = require("../models/books");
 const { requireAdmin } = require("../helper/authMiddleware");
 const { expensiveLimiter } = require("../helper/rateLimit");
@@ -25,7 +25,7 @@ router.post("/fetch/books", requireAdmin, expensiveLimiter, async (req, res) => 
     }
 
     const fetchPromises = categories.map((category) =>
-      axios
+      httpClient
         .get(`https://gutendex.com/books?topic=${category}`)
         .then((response) => ({
           category,
@@ -74,7 +74,7 @@ router.post("/fetch/books", requireAdmin, expensiveLimiter, async (req, res) => 
       count: allSavedBooks.length,
     });
   } catch (err) {
-    console.error("Error fetching multiple categories:", err.message);
+    console.error("Gutendex request failed:", err.response?.status || err.code || "unknown");
     res.status(500).json({ error: "Failed to fetch multiple categories" });
   }
 });

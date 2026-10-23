@@ -1,5 +1,5 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const axios = require("axios");
+const httpClient = require("../helper/httpClient");
 const { geminiTools, openAiTools } = require("../helper/aiTools");
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -21,7 +21,7 @@ async function generateEmbedding(text, type = "query") {
     return null;
   }
   try {
-    const response = await axios.post(
+    const response = await httpClient.post(
       "https://integrate.api.nvidia.com/v1/embeddings",
       {
         model: "nvidia/nv-embed-v1",
@@ -38,10 +38,7 @@ async function generateEmbedding(text, type = "query") {
     );
     return response.data.data[0].embedding;
   } catch (error) {
-    console.error(
-      "NVIDIA Embedding Error:",
-      error.response?.data || error.message,
-    );
+    console.error("NVIDIA embedding request failed:", error.response?.status || error.code || "unknown");
     return null;
   }
 }
@@ -55,7 +52,7 @@ async function chatWithGemini(userPrompt, history) {
     tools: [geminiTools],
     systemInstruction:
       "You are ReadHub AI, a professional and friendly research assistant. Respond directly and warmly to greetings (like 'Hello', 'Good morning') and general questions about yourself (like 'What can you do?'). ONLY use tools for specific research, news, or investigative queries where you need real-time data.",
-  });
+  }, { timeout: 60000 });
   const formattedHistory = history.map((h) => ({
     role: h.sender === "user" ? "user" : "model",
     parts: [{ text: h.message }],
@@ -84,9 +81,7 @@ async function chatWithGemini(userPrompt, history) {
 async function chatWithOpenRouter(userPrompt, history) {
   const key = getOpenRouterKey();
   if (!key) {
-    console.error(
-      "❌ OpenRouter API Key is MISSING! Checked: OPENROUTER_API_KEY, OPEN_ROUTER",
-    );
+    throw new Error("OpenRouter provider is not configured.");
   }
 
   const messages = history.map((h) => ({
@@ -100,7 +95,7 @@ async function chatWithOpenRouter(userPrompt, history) {
   });
   messages.push({ role: "user", content: userPrompt });
 
-  const response = await axios.post(
+  const response = await httpClient.post(
     "https://openrouter.ai/api/v1/chat/completions",
     {
       model: "openrouter/free",
@@ -114,6 +109,7 @@ async function chatWithOpenRouter(userPrompt, history) {
         Authorization: `Bearer ${key}`,
         "Content-Type": "application/json",
       },
+      timeout: 60000,
     },
   );
 

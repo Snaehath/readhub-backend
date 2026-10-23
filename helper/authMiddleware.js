@@ -1,13 +1,15 @@
 const { verifyToken } = require("./authJwt");
 const User = require("../models/user");
 
-function readBearerToken(req) {
+function readAuthToken(req) {
+  const cookieToken = req.cookies?.readhub_token;
+  if (typeof cookieToken === "string" && cookieToken) return cookieToken;
   const [scheme, token, extra] = (req.headers.authorization || "").split(" ");
   return scheme === "Bearer" && token && !extra ? token : null;
 }
 
 function requireAuth(req, res, next) {
-  const token = readBearerToken(req);
+  const token = readAuthToken(req);
   const user = token ? verifyToken(token) : null;
   if (!user || !user.userId) {
     return res.status(401).json({ error: "Authentication required." });
@@ -17,7 +19,7 @@ function requireAuth(req, res, next) {
 }
 
 async function requireAdmin(req, res, next) {
-  const token = readBearerToken(req);
+  const token = readAuthToken(req);
   const user = token ? verifyToken(token) : null;
   if (!user || !user.userId) {
     return res.status(401).json({ error: "Authentication required." });
@@ -30,4 +32,4 @@ async function requireAdmin(req, res, next) {
   return next();
 }
 
-module.exports = { requireAuth, requireAdmin };
+module.exports = { readAuthToken, requireAuth, requireAdmin };

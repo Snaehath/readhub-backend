@@ -1,6 +1,6 @@
 # ReadHub Backend: The Unified Intelligence Hub
 
-ReadHub is an AI-powered news aggregation, storytelling, and investigative platform. The backend is an event-driven, agentic engine built using Node.js, Express, and MongoDB, featuring deep integration with Gemini, OpenRouter, and NVIDIA Embedding models.
+ReadHub is an AI-powered news aggregation and research platform. The backend uses Node.js, Express, and MongoDB, with Gemini and optional provider integrations.
 
 ---
 
@@ -32,9 +32,7 @@ Chat history has evolved into a robust, session-indexed memory system.
 
 ## 🚀 Core Pillar Features
 
-- **AI Story Generation**: A multi-agent system ('The Architect' for world-building and 'The Scribe' for prose) that generates 9-chapter original novels.
 - **Intelligent Hub**: Provides news summaries, in-depth investigations, and cross-referenced reports.
-- **Normalized Review System**: Independent collection for story reviews for high-performance scalability.
 
 ---
 
@@ -50,11 +48,11 @@ backend/
 │   └── ...              # Auth & Utils
 ├── models/              # Mongoose Data Schemas
 │   ├── aiClient.js      # Unified Multi-Provider Agent (Gemini + OpenRouter)
-│   ├── user.js          # Multi-Session Investigative memory
-│   └── ...              # News, Books, and Story models
+│   ├── user.js          # Users and multi-session investigative memory
+│   └── ...              # News, books, and AI report models
 ├── routes/              # Express API Endpoints
-│   ├── chatbot.js       # SSE-driven Streaming Hub & Session Management
-│   └── ...              # Story & News endpoints
+│   ├── chatbot.js       # SSE-driven streaming hub and session management
+│   └── ...              # News, books, user, and report endpoints
 ```
 
 ---
@@ -86,7 +84,9 @@ backend/
    ```
 
 3. **Environment Variables**:
-   Copy `.env.example` to `.env`. `MONGO_URI`, `GEMINI_API_KEY`, and a `JWT_SECRET` of at least 32 bytes are required before the server starts. Other provider keys are needed only for the related integration. Keep `.env` private; it is excluded by `.gitignore`.
+   Copy `.env.example` to `.env`. `MONGO_URI`, `GEMINI_API_KEY`, and a `JWT_SECRET` of at least 32 bytes are required before the server starts. Set `FRONTEND_ORIGINS` to the exact deployed frontend origin(s), separated by commas. Other provider keys are needed only for the related integration. Keep `.env` private; it is excluded by `.gitignore`.
+
+Authentication uses a short-lived HttpOnly cookie. The frontend should call the backend through its `/api` proxy so the cookie remains first-party. In production, configure the frontend's server-side `BACKEND_API_URL` and this backend's `FRONTEND_ORIGINS`.
 
 4. **Run the application**:
    - `npm run dev` for local development with hot reload.

@@ -24,7 +24,6 @@ const newsRoutes = require("./routes/news");
 const booksRoutes = require("./routes/books");
 const chatBotRoute = require("./routes/chatbot");
 const userRoutes = require("./routes/user");
-const storyRoutes = require("./routes/story");
 const aiReporterRoutes = require("./routes/aiReporter");
 
 const app = express();
@@ -48,9 +47,39 @@ app.use(
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   }),
 );
 app.use(express.json({ limit: "1mb" }));
+app.use((req, _res, next) => {
+  req.cookies = {};
+  for (const part of (req.headers.cookie || "").split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 1) continue;
+    const name = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    try {
+      req.cookies[name] = decodeURIComponent(value);
+    } catch (_error) {
+      // Ignore malformed cookie values; auth will fail closed.
+    }
+  }
+  next();
+});
+app.use("/api", (req, _res, next) => {
+  if (!req.headers.authorization && req.cookies?.readhub_token) {
+    req.headers.authorization = `Bearer ${req.cookies.readhub_token}`;
+  }
+  next();
+});
+app.use("/api", (req, res, next) => {
+  const isMutation = !["GET", "HEAD", "OPTIONS"].includes(req.method);
+  const origin = req.get("origin");
+  if (isMutation && ((origin && !allowedOrigins.has(origin)) || (req.cookies?.readhub_token && !origin))) {
+    return res.status(403).json({ error: "Request origin is not allowed." });
+  }
+  return next();
+});
 const path = require("path");
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -69,7 +98,6 @@ app.use("/api/news", newsRoutes);
 app.use("/api/books", booksRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/ai", chatBotRoute);
-app.use("/api/ai-hub/story", storyRoutes);
 app.use("/api/ai-hub/news", aiReporterRoutes);
 
 app.post("/api/ping", (_req, res) => {
