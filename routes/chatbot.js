@@ -13,13 +13,16 @@ const axios = require("axios");
 const getOpenRouterKey = () => process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER;
 
 // Main investigative streaming engine
-router.get("/chat-stream", async (req, res) => {
-  const { userMessage, token: queryToken, sessionId } = req.query; 
+router.post("/chat-stream", async (req, res) => {
+  const { userMessage, sessionId } = req.body;
   const authHeader = req.headers.authorization;
-  const token = (authHeader && authHeader.split(" ")[1]) || queryToken;
-  const userData = verifyToken(token);
+  const [scheme, token] = authHeader?.split(" ") || [];
+  const userData = scheme === "Bearer" ? verifyToken(token) : null;
 
   if (!userData) return res.status(401).json({ message: "Unauthorized" });
+  if (typeof userMessage !== "string" || !userMessage.trim()) {
+    return res.status(400).json({ message: "A message is required." });
+  }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
