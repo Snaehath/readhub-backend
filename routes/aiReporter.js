@@ -5,19 +5,22 @@ const { getRelavantContext } = require("../helper/vectorSearch");
 const { batchScrape } = require("../helper/scraperAgent");
 const AiNews = require("../models/aiNews");
 const { verifyToken } = require("../helper/authJwt");
+const { expensiveLimiter } = require("../helper/rateLimit");
 
 /**
  * AGENTIC REPORTER V2: Research -> Scrape -> Generate
  */
-router.post("/trigger", async (req, res) => {
+router.post("/trigger", expensiveLimiter, async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
 
   if (!userData) return res.status(401).json({ message: "Unauthorized" });
 
-  const { topic } = req.body;
-  if (!topic) return res.status(400).json({ message: "Topic is required" });
+  const topic = typeof req.body?.topic === "string" ? req.body.topic.trim() : "";
+  if (!topic || topic.length > 200) {
+    return res.status(400).json({ message: "Topic must be between 1 and 200 characters." });
+  }
 
   try {
     console.log(`\n🚀 [AGENTIC REPORTER] Starting investigation for: "${topic}"`);

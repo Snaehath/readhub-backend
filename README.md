@@ -11,7 +11,7 @@ ReadHub is an AI-powered news aggregation, storytelling, and investigative platf
 We've migrated the core AI assistant to an **Event-Driven Streaming Architecture**.
 
 - **Real-Time Hooks**: Emits `status`, `tool_call`, `tool_result`, and `llm_step` events via Server-Sent Events (SSE).
-- **Investigative Console Support**: Powers the live-thinking terminal in the frontend, providing 100% transparency into the agent's multi-turn reasoning.
+- **Investigative Console Support**: Sends live activity events to the frontend while an investigation is running.
 
 ### 🧠 Self-Healing RAG
 
@@ -86,20 +86,14 @@ backend/
    ```
 
 3. **Environment Variables**:
-   Create a `.env` file with:
-
-   ```env
-   PORT=5000
-   MONGO_URI=your_mongodb_connection_string
-   JWT_SECRET=your_jwt_secret
-   FRONTEND_ORIGINS=https://readhub-frontend.vercel.app,http://localhost:3000
-   GEMINI_API_KEY=your_gemini_key
-   NVIDIA_API_KEY=your_nvidia_key
-   OPENROUTER_API_KEY=your_openrouter_key
-   ```
+   Copy `.env.example` to `.env`. `MONGO_URI`, `GEMINI_API_KEY`, and a `JWT_SECRET` of at least 32 bytes are required before the server starts. Other provider keys are needed only for the related integration. Keep `.env` private; it is excluded by `.gitignore`.
 
 4. **Run the application**:
-   - `npm run dev` (Hot-reload)
-   - `npm start` (Production)
+   - `npm run dev` for local development with hot reload.
+   - `npm start` to run the production server with Node.js.
+
+Automated backend tests are not configured yet.
+
+The server exposes `/health/live` for process liveness and `/health/ready` for MongoDB readiness. API requests are rate-limited in-process; use a shared limiter store before running multiple backend instances.
 
 ---

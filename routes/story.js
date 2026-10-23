@@ -1,11 +1,14 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const axios = require("axios");
 const { agenticChat } = require("../models/aiClient");
 const { verifyToken } = require("../helper/authJwt");
 const Story = require("../models/story");
+const User = require("../models/user");
 const PROMPTS = require("../helper/prompts");
 const { formatStorySummary, formatStoryResponse } = require("../helper/utils");
+const { expensiveLimiter } = require("../helper/rateLimit");
 
 // Get all stories
 router.get("/allStories", async (req, res) => {
@@ -28,7 +31,7 @@ router.get("/allStories", async (req, res) => {
 const pendingInitializations = new Map();
 
 // Trigger global story progression or initialization
-router.post("/myStory", async (req, res) => {
+router.post("/myStory", expensiveLimiter, async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
@@ -40,7 +43,10 @@ router.post("/myStory", async (req, res) => {
       .json({ message: "Unauthorized: Invalid or missing token" });
   }
 
-  const { storyId } = req.body;
+  const { storyId } = req.body || {};
+  if (storyId !== undefined && (typeof storyId !== "string" || !mongoose.isValidObjectId(storyId))) {
+    return res.status(400).json({ error: "A valid story ID is required." });
+  }
 
   const GLOBAL_LOCK_KEY = "GLOBAL_STORY_INIT";
 
@@ -142,6 +148,12 @@ router.post("/myStory", async (req, res) => {
     // Global daily progression (Admin bypass allowed)
     const isAdminForce =
       req.query.force === "true" && userData.role === "admin";
+    if (isAdminForce) {
+      const currentUser = await User.findById(userData.userId).select("role");
+      if (!currentUser || currentUser.role !== "admin") {
+        return res.status(403).json({ error: "Admins only." });
+      }
+    }
 
     if (!lastPublishedDate || lastPublishedDate < today || isAdminForce) {
       if (story.chapters.length < story.maxChapters) {
@@ -253,15 +265,18 @@ router.patch("/:id/review", async (req, res) => {
       .json({ message: "Unauthorized: Invalid or missing token" });
   }
 
-  const { rating, review, reviewerName } = req.body; // Use reviewerName from body
+  const { rating, review } = req.body || {};
 
-  if (
-    rating !== undefined &&
-    (typeof rating !== "number" || rating < 1 || rating > 5)
-  ) {
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
     return res
       .status(400)
       .json({ error: "Rating must be a number between 1 and 5." });
+  }
+  if (review !== undefined && (typeof review !== "string" || review.length > 2000)) {
+    return res.status(400).json({ error: "Review must be a string of at most 2000 characters." });
+  }
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: "A valid story ID is required." });
   }
 
   try {
@@ -270,11 +285,14 @@ router.patch("/:id/review", async (req, res) => {
     if (!story) {
       return res.status(404).json({ error: "Story not found." });
     }
+    if (story.reviews.some((entry) => entry.userId?.toString() === String(userData.userId))) {
+      return res.status(409).json({ error: "You have already reviewed this story." });
+    }
 
     // Add the new review to the embedded array
     story.reviews.push({
       userId: userData.userId,
-      reviewerName: reviewerName || userData.username || "Anonymous",
+      reviewerName: userData.username || "Reader",
       rating: rating,
       review: review,
       createdAt: new Date(),
@@ -300,6 +318,9 @@ router.patch("/:id/review", async (req, res) => {
 
 // Get individual reviews for a story
 router.get("/:id/reviews", async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: "A valid story ID is required." });
+  }
   try {
     const story = await Story.findById(req.params.id);
     if (!story) {
@@ -318,6 +339,9 @@ router.get("/:id/reviews", async (req, res) => {
 
 // Get story details by ID
 router.get("/:id", async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: "A valid story ID is required." });
+  }
   try {
     const story = await Story.findById(req.params.id);
     if (!story) {

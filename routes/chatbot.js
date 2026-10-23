@@ -2,27 +2,37 @@ const express = require("express");
 const router = express.Router();
 const { agenticChat, generateEmbedding } = require("../models/aiClient");
 const { getRelavantContext } = require("../helper/vectorSearch");
-const { batchScrape, scrapeUrl } = require("../helper/scraperAgent");
+const { scrapeUrl } = require("../helper/scraperAgent");
 const { verifyToken } = require("../helper/authJwt");
 const AgentEventPipeline = require("../helper/eventPipeline");
 const User = require("../models/user");
 const News = require("../models/news");
 const NewsIn = require("../models/newsIn");
-const axios = require("axios");
-
-const getOpenRouterKey = () => process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER;
+const mongoose = require("mongoose");
+const { expensiveLimiter } = require("../helper/rateLimit");
 
 // Main investigative streaming engine
-router.post("/chat-stream", async (req, res) => {
-  const { userMessage, sessionId } = req.body;
+router.post("/chat-stream", expensiveLimiter, async (req, res) => {
+  const { userMessage, sessionId } = req.body || {};
   const authHeader = req.headers.authorization;
   const [scheme, token] = authHeader?.split(" ") || [];
   const userData = scheme === "Bearer" ? verifyToken(token) : null;
 
   if (!userData) return res.status(401).json({ message: "Unauthorized" });
-  if (typeof userMessage !== "string" || !userMessage.trim()) {
-    return res.status(400).json({ message: "A message is required." });
+  if (typeof userMessage !== "string" || !userMessage.trim() || userMessage.length > 4000) {
+    return res.status(400).json({ message: "A message between 1 and 4000 characters is required." });
   }
+  if (sessionId !== undefined && (typeof sessionId !== "string" || sessionId.length > 100)) {
+    return res.status(400).json({ message: "Session ID must be a string of at most 100 characters." });
+  }
+
+  let user;
+  try {
+    user = await User.findById(userData.userId);
+  } catch (_error) {
+    return res.status(500).json({ message: "Unable to load the authenticated user." });
+  }
+  if (!user) return res.status(401).json({ message: "Authenticated user no longer exists." });
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -34,7 +44,6 @@ router.post("/chat-stream", async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const user = await User.findById(userData.userId);
     const activeSessionId = sessionId || require("crypto").randomUUID();
     
     let session = user.sessions.find(s => s.sessionId === activeSessionId);
@@ -141,6 +150,7 @@ router.get("/history", async (req, res) => {
 
   try {
     const user = await User.findById(userData.userId).select("sessions");
+    if (!user) return res.status(401).json({ message: "Authenticated user no longer exists." });
     const sessionList = user.sessions.map(s => ({
       sessionId: s.sessionId,
       title: s.title,
@@ -159,9 +169,11 @@ router.get("/history/:sessionId", async (req, res) => {
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
   if (!userData) return res.status(401).json({ message: "Unauthorized" });
+  if (req.params.sessionId.length > 100) return res.status(400).json({ error: "Invalid session ID." });
 
   try {
     const user = await User.findById(userData.userId);
+    if (!user) return res.status(401).json({ message: "Authenticated user no longer exists." });
     const session = user.sessions.find(s => s.sessionId === req.params.sessionId);
     res.json({ history: session ? session.messages : [] });
   } catch (error) {
@@ -170,11 +182,12 @@ router.get("/history/:sessionId", async (req, res) => {
 });
 
 // Delete specific session
-router.get("/delete-history/:sessionId", async (req, res) => {
+router.delete("/history/:sessionId", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
   if (!userData) return res.status(401).json({ message: "Unauthorized" });
+  if (req.params.sessionId.length > 100) return res.status(400).json({ error: "Invalid session ID." });
 
   try {
     await User.findByIdAndUpdate(userData.userId, { $pull: { sessions: { sessionId: req.params.sessionId } } });
@@ -185,7 +198,7 @@ router.get("/delete-history/:sessionId", async (req, res) => {
 });
 
 // Clear all history
-router.get("/clear-history", async (req, res) => {
+router.delete("/history", async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
@@ -200,13 +213,19 @@ router.get("/clear-history", async (req, res) => {
 });
 
 // One-off chat for Ask AI Modal
-router.post("/chat", async (req, res) => {
+router.post("/chat", expensiveLimiter, async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
   if (!userData) return res.status(401).json({ message: "Unauthorized" });
 
-  const { userMessage } = req.body;
+  const { userMessage } = req.body || {};
+  if (typeof userMessage === "string" && (!userMessage.trim() || userMessage.length > 4000)) {
+    return res.status(400).json({ error: "Message must be between 1 and 4000 characters." });
+  }
+  if (!userMessage || (typeof userMessage !== "string" && (!mongoose.Types.ObjectId.isValid(userMessage.id) || !["us", "in"].includes(userMessage.selectedCountry)))) {
+    return res.status(400).json({ error: "A valid message or article selection is required." });
+  }
   try {
     let prompt = typeof userMessage === 'string' ? userMessage : "";
     if (userMessage?.id) {
@@ -222,14 +241,23 @@ router.post("/chat", async (req, res) => {
 });
 
 // Forecast AI Modal
-router.post("/futureNews", async (req, res) => {
+router.post("/futureNews", expensiveLimiter, async (req, res) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(" ")[1];
   const userData = verifyToken(token);
   if (!userData) return res.status(401).json({ message: "Unauthorized" });
 
-  const { userMessage } = req.body;
+  const { userMessage } = req.body || {};
+  if (!userMessage || typeof userMessage !== "object" || !mongoose.Types.ObjectId.isValid(userMessage.id) || !["us", "in"].includes(userMessage.selectedCountry)) {
+    return res.status(400).json({ error: "A valid article selection is required." });
+  }
   const { id, selectedCountry, targetYear, previousForecast } = userMessage;
+  if (targetYear !== undefined && (!Number.isInteger(targetYear) || targetYear < 2020 || targetYear > 2100)) {
+    return res.status(400).json({ error: "Target year must be between 2020 and 2100." });
+  }
+  if (previousForecast !== undefined && (typeof previousForecast !== "string" || previousForecast.length > 4000)) {
+    return res.status(400).json({ error: "Previous forecast is too long." });
+  }
 
   try {
     const Model = selectedCountry === "in" ? NewsIn : News;

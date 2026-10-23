@@ -4,25 +4,19 @@ const https = require("https");
 const News = require("../models/news");
 const NewsIn = require("../models/newsIn");
 const { processBackgroundEmbeddings } = require("../helper/backfillEmbeddings");
-const { verifyToken } = require("../helper/authJwt");
+const { requireAdmin } = require("../helper/authMiddleware");
 
 // Force IPv4 for Render
 const httpsAgent = new https.Agent({ family: 4 });
 const router = express.Router();
+const allowedCategories = new Set([
+  "technology", "business", "politics", "health", "sports", "science", "entertainment",
+]);
 
-const requireAdmin = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  const [scheme, token] = authHeader?.split(" ") || [];
-  const userData = scheme === "Bearer" ? verifyToken(token) : null;
-
-  if (!userData) {
-    return res.status(401).json({ error: "Authentication required." });
-  }
-  if (userData.role !== "admin") {
-    return res.status(403).json({ error: "Admins only." });
-  }
-
-  next();
+const readCategory = (value) => {
+  if (value === undefined || value === "all") return { value: null };
+  if (typeof value !== "string" || !allowedCategories.has(value)) return { error: true };
+  return { value };
 };
 
 const getPagination = (query) => {
@@ -169,9 +163,11 @@ router.post("/fetch-categories/in", requireAdmin, async (req, res) => {
 // Paginated US news
 router.get("/new/pagination", async (req, res) => {
   const { page, limit } = getPagination(req.query);
-  const category = req.query.category;
+  const parsedCategory = readCategory(req.query.category);
+  if (parsedCategory.error) return res.status(400).json({ error: "Invalid news category." });
+  const category = parsedCategory.value;
   try {
-    const query = category && category !== "all" ? { category } : {};
+    const query = category ? { category } : {};
     const result = await News.paginate(query, { page, limit, sort: { publishedAt: -1 } });
     res.json({ currentPage: result.page, totalPages: result.totalPages, totalArticles: result.totalDocs, articles: result.docs });
   } catch (err) {
@@ -182,9 +178,11 @@ router.get("/new/pagination", async (req, res) => {
 // Paginated India news
 router.get("/newIn/pagination", async (req, res) => {
   const { page, limit } = getPagination(req.query);
-  const category = req.query.category;
+  const parsedCategory = readCategory(req.query.category);
+  if (parsedCategory.error) return res.status(400).json({ error: "Invalid news category." });
+  const category = parsedCategory.value;
   try {
-    const query = category && category !== "all" ? { category } : {};
+    const query = category ? { category } : {};
     const result = await NewsIn.paginate(query, { page, limit, sort: { publishedAt: -1 } });
     res.json({ currentPage: result.page, totalPages: result.totalPages, totalArticles: result.totalDocs, articles: result.docs });
   } catch (err) {
@@ -202,11 +200,13 @@ router.get("/search/us", async (req, res) => {
   if (q && q.length > 100) {
     return res.status(400).json({ error: "Search query must be 100 characters or fewer." });
   }
+  const parsedCategory = readCategory(category);
+  if (parsedCategory.error) return res.status(400).json({ error: "Invalid news category." });
   try {
     const searchTerm = q?.trim();
     const escapedSearchTerm = searchTerm ? escapeRegex(searchTerm) : "";
     let query = escapedSearchTerm ? { $or: [{ title: { $regex: escapedSearchTerm, $options: "i" } }, { description: { $regex: escapedSearchTerm, $options: "i" } }] } : {};
-    if (category && category !== "all") query.category = category;
+    if (parsedCategory.value) query.category = parsedCategory.value;
     const result = await News.paginate(query, { page, limit, sort: { publishedAt: -1 } });
     res.json({ currentPage: result.page, totalPages: result.totalPages, totalArticles: result.totalDocs, articles: result.docs });
   } catch (err) {
@@ -224,11 +224,13 @@ router.get("/search/in", async (req, res) => {
   if (q && q.length > 100) {
     return res.status(400).json({ error: "Search query must be 100 characters or fewer." });
   }
+  const parsedCategory = readCategory(category);
+  if (parsedCategory.error) return res.status(400).json({ error: "Invalid news category." });
   try {
     const searchTerm = q?.trim();
     const escapedSearchTerm = searchTerm ? escapeRegex(searchTerm) : "";
     let query = escapedSearchTerm ? { $or: [{ title: { $regex: escapedSearchTerm, $options: "i" } }, { description: { $regex: escapedSearchTerm, $options: "i" } }] } : {};
-    if (category && category !== "all") query.category = category;
+    if (parsedCategory.value) query.category = parsedCategory.value;
     const result = await NewsIn.paginate(query, { page, limit, sort: { publishedAt: -1 } });
     res.json({ currentPage: result.page, totalPages: result.totalPages, totalArticles: result.totalDocs, articles: result.docs });
   } catch (err) {

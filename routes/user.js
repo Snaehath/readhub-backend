@@ -3,17 +3,42 @@ const router = express.Router();
 const bcrypt = require("bcrypt");
 const User = require("../models/user");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const JWT_SECRET = process.env.JWT_SECRET;
 const { verifyToken } = require("../helper/authJwt");
+const { requireAdmin } = require("../helper/authMiddleware");
+const { authLimiter } = require("../helper/rateLimit");
+const DUMMY_PASSWORD_HASH = "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
-router.post("/addUser", async (req, res) => {
+const isValidEmail = (email) =>
+  typeof email === "string" && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const isValidPassword = (password) =>
+  typeof password === "string" && Buffer.byteLength(password, "utf8") >= 10 && Buffer.byteLength(password, "utf8") <= 72;
+const isValidAvatar = (avatar) => {
+  if (typeof avatar !== "string" || avatar.length > 2048) return false;
+  if (avatar.startsWith("/") && !avatar.startsWith("//")) return true;
   try {
-    const { email, username, password, avatar } = req.body;
+    return new URL(avatar).protocol === "https:";
+  } catch (_error) {
+    return false;
+  }
+};
 
-    if (!email || !password) {
+router.post("/addUser", authLimiter, async (req, res) => {
+  try {
+    const { email: rawEmail, username, password, avatar } = req.body || {};
+    const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
+
+    if (!isValidEmail(email) || !isValidPassword(password)) {
       return res
         .status(400)
-        .json({ error: "Email and password are required." });
+        .json({ error: "Provide a valid email and a password between 10 and 72 UTF-8 bytes." });
+    }
+    if (username !== undefined && (typeof username !== "string" || username.trim().length < 1 || username.trim().length > 40)) {
+      return res.status(400).json({ error: "Username must be between 1 and 40 characters." });
+    }
+    if (avatar !== undefined && !isValidAvatar(avatar)) {
+      return res.status(400).json({ error: "Avatar must be an HTTPS URL or a local path." });
     }
 
     const existingUser = await User.findOne({ email });
@@ -26,7 +51,7 @@ router.post("/addUser", async (req, res) => {
     // Create new user
     const newUser = new User({
       email,
-      username,
+      username: username?.trim(),
       passwordhash: await bcrypt.hash(password, 10),
       avatar,
       likes_us: [],
@@ -46,32 +71,28 @@ router.post("/addUser", async (req, res) => {
       },
     });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ error: "User already exists with this email." });
+    }
     console.error("Error creating user:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", authLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email: rawEmail, password } = req.body || {};
+    const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
 
-    // Validate input
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ error: "Email and password are required." });
+    if (!isValidEmail(email) || typeof password !== "string" || Buffer.byteLength(password, "utf8") < 1 || Buffer.byteLength(password, "utf8") > 72) {
+      return res.status(400).json({ error: "Valid email and password are required." });
     }
 
     // Find user by email
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    // Compare passwords
-    const isMatch = await bcrypt.compare(password, user.passwordhash);
-    if (!isMatch) {
-      return res.status(401).json({ error: "Invalid password." });
+    const isMatch = await bcrypt.compare(password, user?.passwordhash || DUMMY_PASSWORD_HASH);
+    if (!user || !isMatch) {
+      return res.status(401).json({ error: "Invalid email or password." });
     }
 
     // Generate JWT Token
@@ -114,14 +135,23 @@ router.put("/update", async (req, res) => {
       return res.status(401).json({ error: "Unauthorized: Invalid or missing token." });
     }
 
-    const { username, avatar } = req.body;
+    const { username, avatar } = req.body || {};
+    if (username === undefined && avatar === undefined) {
+      return res.status(400).json({ error: "Provide a username or avatar to update." });
+    }
+    if (username !== undefined && (typeof username !== "string" || username.trim().length < 1 || username.trim().length > 40)) {
+      return res.status(400).json({ error: "Username must be between 1 and 40 characters." });
+    }
+    if (avatar !== undefined && !isValidAvatar(avatar)) {
+      return res.status(400).json({ error: "Avatar must be an HTTPS URL or a local path." });
+    }
     const user = await User.findById(decoded.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
 
     // Update user properties (Role is Restricted - Admin only via DB)
-    if (username !== undefined) user.username = username;
+    if (username !== undefined) user.username = username.trim();
     if (avatar !== undefined) user.avatar = avatar;
 
     await user.save();
@@ -142,16 +172,12 @@ router.put("/update", async (req, res) => {
 });
 
 // Admin-Only: Change any user's role
-router.patch("/update-role", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(" ")[1];
-  const userData = require("../helper/authJwt").verifyToken(token);
+router.patch("/update-role", requireAdmin, async (req, res) => {
+  const { targetUserId, newRole } = req.body || {};
 
-  if (!userData || userData.role !== "admin") {
-    return res.status(403).json({ error: "Unauthorized: Admins only." });
+  if (typeof targetUserId !== "string" || !mongoose.isValidObjectId(targetUserId)) {
+    return res.status(400).json({ error: "A valid target user ID is required." });
   }
-
-  const { targetUserId, newRole } = req.body;
 
   if (!["user", "admin"].includes(newRole)) {
     return res.status(400).json({ error: "Invalid role specified." });
@@ -216,8 +242,8 @@ router.post("/like-news", async (req, res) => {
   }
 
   try {
-    const { newsId, country } = req.body;
-    if (!newsId || !["us", "in"].includes(country)) {
+    const { newsId, country } = req.body || {};
+    if (typeof newsId !== "string" || !mongoose.isValidObjectId(newsId) || !["us", "in"].includes(country)) {
       return res
         .status(400)
         .json({ error: "newsId and valid country (us/in) are required." });
@@ -257,8 +283,8 @@ router.post("/bookmark-news", async (req, res) => {
   }
 
   try {
-    const { newsId, country } = req.body;
-    if (!newsId || !["us", "in"].includes(country)) {
+    const { newsId, country } = req.body || {};
+    if (typeof newsId !== "string" || !mongoose.isValidObjectId(newsId) || !["us", "in"].includes(country)) {
       return res
         .status(400)
         .json({ error: "newsId and valid country (us/in) are required." });

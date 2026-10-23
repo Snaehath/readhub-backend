@@ -1,9 +1,11 @@
 const express = require("express");
 const axios = require("axios");
 const Books = require("../models/books");
+const { requireAdmin } = require("../helper/authMiddleware");
+const { expensiveLimiter } = require("../helper/rateLimit");
 const router = express.Router();
 
-router.get("/fetch/books", async (req, res) => {
+router.post("/fetch/books", requireAdmin, expensiveLimiter, async (req, res) => {
   try {
     const categories = [
       "biography",
