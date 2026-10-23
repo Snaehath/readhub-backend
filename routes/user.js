@@ -106,15 +106,16 @@ router.post("/login", async (req, res) => {
 
 router.put("/update", async (req, res) => {
   try {
-    const { userId, username, avatar } = req.body;
+    const authHeader = req.headers.authorization;
+    const [scheme, token] = authHeader?.split(" ") || [];
+    const decoded = scheme === "Bearer" ? verifyToken(token) : null;
 
-    // Validate userId
-    if (!userId) {
-      return res.status(400).json({ error: "User ID is required." });
+    if (!decoded) {
+      return res.status(401).json({ error: "Unauthorized: Invalid or missing token." });
     }
 
-    // Find user by ID
-    const user = await User.findById(userId);
+    const { username, avatar } = req.body;
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
