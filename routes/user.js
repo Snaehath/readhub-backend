@@ -223,6 +223,31 @@ router.put("/reset-password", async (req, res) => {
   });
 });
 
+router.delete("/account", authLimiter, async (req, res) => {
+  const decoded = verifyToken(readAuthToken(req));
+  if (!decoded) return res.status(401).json({ error: "Authentication required." });
+  const password = req.body?.password;
+  if (typeof password !== "string" || Buffer.byteLength(password, "utf8") > 72) {
+    return res.status(400).json({ error: "Confirm your password to delete this account." });
+  }
+  try {
+    const user = await User.findById(decoded.userId);
+    if (!user || !(await bcrypt.compare(password, user.passwordhash))) {
+      return res.status(401).json({ error: "Password confirmation failed." });
+    }
+    await User.deleteOne({ _id: user._id });
+    res.clearCookie("readhub_token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/api",
+    });
+    return res.status(204).end();
+  } catch (_error) {
+    return res.status(500).json({ error: "Unable to delete the account." });
+  }
+});
+
 // Get current user details
 router.get("/me", async (req, res) => {
   const decoded = verifyToken(readAuthToken(req));

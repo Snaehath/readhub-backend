@@ -78,7 +78,7 @@ async function createRequestOptions(url) {
 }
 
 // Scrape full-text content from a URL
-async function scrapeUrl(url) {
+async function scrapeUrl(url, signal) {
   let hostname = "unknown";
   try {
     const request = await createRequestOptions(url);
@@ -92,6 +92,7 @@ async function scrapeUrl(url) {
       maxBodyLength: MAX_RESPONSE_BYTES,
       responseType: "text",
       timeout: 12000,
+      signal,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -128,4 +129,4 @@ async function batchScrape(urls) {
   ).join("\n\n---\n\n");
 }
 
-module.exports = { scrapeUrl, batchScrape };
+module.exports = { scrapeUrl, batchScrape, createRequestOptions, isPublicAddress };

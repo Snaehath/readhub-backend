@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("node:crypto");
 const httpClient = require("../helper/httpClient");
 const https = require("https");
 const News = require("../models/news");
@@ -8,6 +9,23 @@ const { requireAdmin } = require("../helper/authMiddleware");
 // Force IPv4 for Render
 const httpsAgent = new https.Agent({ family: 4 });
 const router = express.Router();
+router.use((req, res, next) => {
+  if (req.method === "GET") {
+    res.set("Cache-Control", "public, max-age=0, s-maxage=60, stale-while-revalidate=300");
+  }
+  next();
+});
+
+function requireNewsRefreshAccess(req, res, next) {
+  const configuredSecret = process.env.NEWS_INGESTION_CRON_SECRET;
+  const suppliedSecret = req.get("x-cron-secret");
+  if (configuredSecret && suppliedSecret) {
+    const expected = Buffer.from(configuredSecret);
+    const supplied = Buffer.from(suppliedSecret);
+    if (expected.length === supplied.length && crypto.timingSafeEqual(expected, supplied)) return next();
+  }
+  return requireAdmin(req, res, next);
+}
 const allowedCategories = new Set([
   "technology", "business", "politics", "health", "sports", "science", "entertainment",
 ]);
@@ -33,6 +51,17 @@ const getPagination = (query) => {
 };
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const readDiscoveryOptions = (query) => {
+  const sort = query.sort === undefined ? "latest" : query.sort;
+  const freshness = query.freshness === undefined ? "any" : query.freshness;
+  if (!["latest", "oldest"].includes(sort) || !["any", "24h", "7d", "30d"].includes(freshness)) return null;
+  const hours = { "24h": 24, "7d": 168, "30d": 720 }[freshness];
+  return {
+    sort: { publishedAt: sort === "oldest" ? 1 : -1 },
+    dateFilter: hours ? { publishedAt: { $gte: new Date(Date.now() - hours * 60 * 60 * 1000) } } : {},
+  };
+};
 
 // Fetch US news from NewsAPI
 router.post("/fetch/us", requireAdmin, async (req, res) => {
@@ -89,7 +118,7 @@ router.post("/fetch/in", requireAdmin, async (req, res) => {
 });
 
 // Fetch US news categories and prune to top 50
-router.post("/fetch-categories/us", requireAdmin, async (req, res) => {
+router.post("/fetch-categories/us", requireNewsRefreshAccess, async (req, res) => {
   if (!process.env.NEWS_API_KEY) return res.status(503).json({ error: "News provider is not configured." });
   try {
     const categories = ["technology", "science", "health", "sports", "business", "entertainment", "politics"];
@@ -123,7 +152,7 @@ router.post("/fetch-categories/us", requireAdmin, async (req, res) => {
 });
 
 // Fetch India news categories and prune to top 50
-router.post("/fetch-categories/in", requireAdmin, async (req, res) => {
+router.post("/fetch-categories/in", requireNewsRefreshAccess, async (req, res) => {
   if (!process.env.GNEWS_API_KEY) return res.status(503).json({ error: "News provider is not configured." });
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   try {
@@ -172,9 +201,11 @@ router.get("/new/pagination", async (req, res) => {
   const parsedCategory = readCategory(req.query.category);
   if (parsedCategory.error) return res.status(400).json({ error: "Invalid news category." });
   const category = parsedCategory.value;
+  const discovery = readDiscoveryOptions(req.query);
+  if (!discovery) return res.status(400).json({ error: "Invalid sort or freshness option." });
   try {
-    const query = category ? { category } : {};
-    const result = await News.paginate(query, { page, limit, sort: { publishedAt: -1 } });
+    const query = { ...discovery.dateFilter, ...(category ? { category } : {}) };
+    const result = await News.paginate(query, { page, limit, sort: discovery.sort });
     res.json({ currentPage: result.page, totalPages: result.totalPages, totalArticles: result.totalDocs, articles: result.docs });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch paginated news" });
@@ -187,9 +218,11 @@ router.get("/newIn/pagination", async (req, res) => {
   const parsedCategory = readCategory(req.query.category);
   if (parsedCategory.error) return res.status(400).json({ error: "Invalid news category." });
   const category = parsedCategory.value;
+  const discovery = readDiscoveryOptions(req.query);
+  if (!discovery) return res.status(400).json({ error: "Invalid sort or freshness option." });
   try {
-    const query = category ? { category } : {};
-    const result = await NewsIn.paginate(query, { page, limit, sort: { publishedAt: -1 } });
+    const query = { ...discovery.dateFilter, ...(category ? { category } : {}) };
+    const result = await NewsIn.paginate(query, { page, limit, sort: discovery.sort });
     res.json({ currentPage: result.page, totalPages: result.totalPages, totalArticles: result.totalDocs, articles: result.docs });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch paginated news" });
@@ -208,12 +241,15 @@ router.get("/search/us", async (req, res) => {
   }
   const parsedCategory = readCategory(category);
   if (parsedCategory.error) return res.status(400).json({ error: "Invalid news category." });
+  const discovery = readDiscoveryOptions(req.query);
+  if (!discovery) return res.status(400).json({ error: "Invalid sort or freshness option." });
   try {
     const searchTerm = q?.trim();
     const escapedSearchTerm = searchTerm ? escapeRegex(searchTerm) : "";
     let query = escapedSearchTerm ? { $or: [{ title: { $regex: escapedSearchTerm, $options: "i" } }, { description: { $regex: escapedSearchTerm, $options: "i" } }] } : {};
+    Object.assign(query, discovery.dateFilter);
     if (parsedCategory.value) query.category = parsedCategory.value;
-    const result = await News.paginate(query, { page, limit, sort: { publishedAt: -1 } });
+    const result = await News.paginate(query, { page, limit, sort: discovery.sort });
     res.json({ currentPage: result.page, totalPages: result.totalPages, totalArticles: result.totalDocs, articles: result.docs });
   } catch (err) {
     res.status(500).json({ error: "Failed to search news" });
@@ -232,12 +268,15 @@ router.get("/search/in", async (req, res) => {
   }
   const parsedCategory = readCategory(category);
   if (parsedCategory.error) return res.status(400).json({ error: "Invalid news category." });
+  const discovery = readDiscoveryOptions(req.query);
+  if (!discovery) return res.status(400).json({ error: "Invalid sort or freshness option." });
   try {
     const searchTerm = q?.trim();
     const escapedSearchTerm = searchTerm ? escapeRegex(searchTerm) : "";
     let query = escapedSearchTerm ? { $or: [{ title: { $regex: escapedSearchTerm, $options: "i" } }, { description: { $regex: escapedSearchTerm, $options: "i" } }] } : {};
+    Object.assign(query, discovery.dateFilter);
     if (parsedCategory.value) query.category = parsedCategory.value;
-    const result = await NewsIn.paginate(query, { page, limit, sort: { publishedAt: -1 } });
+    const result = await NewsIn.paginate(query, { page, limit, sort: discovery.sort });
     res.json({ currentPage: result.page, totalPages: result.totalPages, totalArticles: result.totalDocs, articles: result.docs });
   } catch (err) {
     res.status(500).json({ error: "Failed to search news" });

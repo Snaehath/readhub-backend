@@ -7,6 +7,7 @@ class AgentEventPipeline extends EventEmitter {
   }
 
   emitEvent(type, message, data = {}) {
+    if (this.res.destroyed || this.res.writableEnded) return;
     const event = {
       type,
       message,
@@ -20,7 +21,7 @@ class AgentEventPipeline extends EventEmitter {
 
   startHeartbeat() {
     this.heartbeatInterval = setInterval(() => {
-      this.res.write(': heartbeat\n\n'); // SSE Comment as heartbeat
+      if (!this.res.destroyed && !this.res.writableEnded) this.res.write(': heartbeat\n\n'); // SSE Comment as heartbeat
     }, 15000); // 15 seconds pulse
   }
 
@@ -46,8 +47,8 @@ class AgentEventPipeline extends EventEmitter {
     this.emitEvent('llm_step', message);
   }
 
-  final(reply, thoughts, latency, sources = []) {
-    this.emitEvent('final', 'Response ready', { reply, thoughts, latency, sources });
+  final(reply, thoughts, latency, sources = [], sessionId) {
+    this.emitEvent('final', 'Response ready', { reply, thoughts, latency, sources, sessionId });
   }
 }
 

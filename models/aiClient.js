@@ -2,6 +2,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const httpClient = require("../helper/httpClient");
 const { geminiTools, openAiTools } = require("../helper/aiTools");
 const { SYSTEM_PROMPT } = require("../helper/aiPrompts");
+const logger = require("../helper/logger");
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY;
@@ -43,7 +44,7 @@ function toToolResult(name, args) {
   return { type: "tool_call", ...call };
 }
 
-async function chatWithGemini(modelName, userPrompt, history, allowTools, jsonMode) {
+async function chatWithGemini(modelName, userPrompt, history, allowTools, jsonMode, signal) {
   const modelConfig = {
     model: modelName,
     systemInstruction: SYSTEM_PROMPT,
@@ -57,7 +58,7 @@ async function chatWithGemini(modelName, userPrompt, history, allowTools, jsonMo
     parts: [{ text: message.content }],
   }));
   const chat = model.startChat({ history: formattedHistory });
-  const result = await chat.sendMessage(userPrompt);
+  const result = await chat.sendMessage(userPrompt, { signal });
   const response = result.response;
   const call = response.functionCalls()?.[0];
   if (call) return toToolResult(call.name, call.args);
@@ -79,7 +80,7 @@ function parseOpenAiToolCall(call) {
   return toToolResult(call.function.name, args);
 }
 
-async function chatWithOpenAiCompatibleProvider({ provider, endpoint, key, model, userPrompt, history, allowTools, jsonMode }) {
+async function chatWithOpenAiCompatibleProvider({ provider, endpoint, key, model, userPrompt, history, allowTools, jsonMode, signal }) {
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
     ...normalizeHistory(history),
@@ -105,6 +106,7 @@ async function chatWithOpenAiCompatibleProvider({ provider, endpoint, key, model
       "Content-Type": "application/json",
     },
     timeout: 30000,
+    signal,
   });
   const message = response.data?.choices?.[0]?.message;
   if (!message) throw new Error(`${provider} returned an empty response.`);
@@ -115,7 +117,7 @@ async function chatWithOpenAiCompatibleProvider({ provider, endpoint, key, model
   return { type: "text", text: message.content };
 }
 
-async function chatWithNvidia(userPrompt, history, allowTools, jsonMode) {
+async function chatWithNvidia(userPrompt, history, allowTools, jsonMode, signal) {
   return chatWithOpenAiCompatibleProvider({
     provider: "NVIDIA NIM",
     endpoint: "https://integrate.api.nvidia.com/v1/chat/completions",
@@ -125,10 +127,11 @@ async function chatWithNvidia(userPrompt, history, allowTools, jsonMode) {
     history,
     allowTools,
     jsonMode,
+    signal,
   });
 }
 
-async function chatWithOpenRouter(userPrompt, history, allowTools, jsonMode) {
+async function chatWithOpenRouter(userPrompt, history, allowTools, jsonMode, signal) {
   return chatWithOpenAiCompatibleProvider({
     provider: "OpenRouter",
     endpoint: "https://openrouter.ai/api/v1/chat/completions",
@@ -138,6 +141,7 @@ async function chatWithOpenRouter(userPrompt, history, allowTools, jsonMode) {
     history,
     allowTools,
     jsonMode,
+    signal,
   });
 }
 
@@ -152,14 +156,14 @@ async function agenticChat(userPrompt, history = [], options = {}) {
 
   if (process.env.GEMINI_API_KEY?.trim()) {
     for (const model of GEMINI_MODELS) {
-      providers.push({ name: "Gemini", model, run: () => chatWithGemini(model, userPrompt, history, allowTools, jsonMode) });
+      providers.push({ name: "Gemini", model, run: () => chatWithGemini(model, userPrompt, history, allowTools, jsonMode, options.signal) });
     }
   }
   if (NVIDIA_API_KEY?.trim()) {
-    providers.push({ name: "NVIDIA NIM", model: NVIDIA_CHAT_MODEL, run: () => chatWithNvidia(userPrompt, history, allowTools, jsonMode) });
+    providers.push({ name: "NVIDIA NIM", model: NVIDIA_CHAT_MODEL, run: () => chatWithNvidia(userPrompt, history, allowTools, jsonMode, options.signal) });
   }
   if (OPENROUTER_API_KEY?.trim()) {
-    providers.push({ name: "OpenRouter", model: OPENROUTER_MODEL, run: () => chatWithOpenRouter(userPrompt, history, allowTools, jsonMode) });
+    providers.push({ name: "OpenRouter", model: OPENROUTER_MODEL, run: () => chatWithOpenRouter(userPrompt, history, allowTools, jsonMode, options.signal) });
   }
 
   if (providers.length === 0) {
@@ -171,9 +175,10 @@ async function agenticChat(userPrompt, history = [], options = {}) {
     try {
       return await provider.run();
     } catch (error) {
+      if (options.signal?.aborted) throw error;
       const code = providerCode(error);
       failures.push(`${provider.name}/${provider.model}:${code}`);
-      console.warn(`${provider.name} model ${provider.model} failed (${code}); trying the next configured provider.`);
+      logger.warn("ai_provider_failed", { provider: provider.name, model: provider.model, code });
     }
   }
 

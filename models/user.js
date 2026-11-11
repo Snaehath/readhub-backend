@@ -25,6 +25,7 @@ const UserSchema = new mongoose.Schema(
         thoughts: [{ type: String }],
         latency: { type: String },
         sources: [{ type: Object }],
+        feedback: { type: String, enum: ["helpful", "not_helpful"], default: undefined },
         events: [{ type: Object }], // Store structured events
         createdAt: { type: Date, default: Date.now }
       }],

@@ -15,5 +15,7 @@ const NewsSchema = new mongoose.Schema({
 });
 
 NewsSchema.plugin(mongoosePaginate);
+NewsSchema.index({ publishedAt: -1 });
+NewsSchema.index({ category: 1, publishedAt: -1 });
 
 module.exports = mongoose.models.NewsIn || mongoose.model("NewsIn", NewsSchema);

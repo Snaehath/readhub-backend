@@ -17,6 +17,9 @@ if (missingEnv.length > 0) {
 if (Buffer.byteLength(process.env.JWT_SECRET, "utf8") < 32) {
   throw new Error("JWT_SECRET must be at least 32 bytes long.");
 }
+if (process.env.NEWS_INGESTION_CRON_SECRET && Buffer.byteLength(process.env.NEWS_INGESTION_CRON_SECRET, "utf8") < 32) {
+  throw new Error("NEWS_INGESTION_CRON_SECRET must be at least 32 bytes long when configured.");
+}
 const hasAiProvider = [
   process.env.GEMINI_API_KEY,
   process.env.NVIDIA_API_KEY,
@@ -37,6 +40,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const helmet = require("helmet");
 const { apiLimiter } = require("./helper/rateLimit");
+const logger = require("./helper/logger");
 
 const newsRoutes = require("./routes/news");
 const booksRoutes = require("./routes/books");
@@ -137,23 +141,23 @@ app.use((err, _req, res, _next) => {
   if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
     return res.status(400).json({ error: "Request body must contain valid JSON." });
   }
-  console.error("Unhandled request error:", err.name || "Error");
+  logger.error("unhandled_request_error", { errorType: err.name || "Error" });
   return res.status(500).json({ error: "Internal server error." });
 });
 
 async function startServer() {
   await mongoose.connect(process.env.MONGO_URI);
-  console.log("MongoDB connected");
+  logger.info("mongodb_connected");
 
   const server = app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
+    logger.info("server_listening", { port });
   });
 
   let isShuttingDown = false;
   const shutdown = (signal) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
-    console.log(`${signal} received; shutting down gracefully`);
+    logger.info("server_shutdown", { signal });
     server.close(async (error) => {
       if (error) process.exitCode = 1;
       try {
@@ -171,7 +175,6 @@ async function startServer() {
 startServer().catch((err) => {
   const message = String(err.message || "Unknown startup error")
     .replace(/mongodb(?:\+srv)?:\/\/[^@\s]+@/gi, "mongodb+srv://[redacted]@");
-  const code = err.code ? ` (${err.code})` : "";
-  console.error(`Backend startup failed${code}: ${message}`);
+  logger.error("backend_startup_failed", { code: err.code || null, message });
   process.exitCode = 1;
 });

@@ -91,7 +91,22 @@ Authentication uses a short-lived HttpOnly cookie. The frontend should call the 
    - `npm run dev` for local development with hot reload.
    - `npm start` to run the production server with Node.js.
 
-Automated backend tests are not configured yet.
+## Privacy and account lifecycle
+
+- Chat messages, source references, likes, and bookmarks are stored in the user's MongoDB record until the user clears chat history or deletes their account.
+- `DELETE /api/user/account` requires the current password. It permanently deletes the user record, including chat history and saved preferences, and clears the authentication cookie.
+- There is no automatic chat-history expiration configured. MongoDB/provider backups can retain deleted records according to the retention policy configured for that database; set and document that policy in the hosting account.
+- News records are pruned to the latest 50 records in the ingestion flow. Scraped article text may be cached in those records.
+
+## Operations and deployment checklist
+
+- Configure `MONGO_URI`, a unique `JWT_SECRET` (32+ bytes), AI provider keys, and the exact `FRONTEND_ORIGINS`; never put provider secrets in frontend variables.
+- Configure database backups and periodically verify a restore. The app does not schedule or verify backups itself.
+- `/health/live` checks the process and `/health/ready` checks MongoDB connectivity. Add external uptime monitoring against readiness.
+- Provider calls have request timeouts and automatic provider failover. JSON logs include provider, model, failure code, and server lifecycle events without logging prompts or API keys.
+- API throttles currently use an in-process store. Configure a shared rate-limit store before scaling to multiple backend instances.
+- News ingestion accepts an admin request or a trusted scheduler sending `X-Cron-Secret`. Set a random `NEWS_INGESTION_CRON_SECRET` (32+ bytes) on the backend and set matching `NEWS_INGESTION_CRON_SECRET` and `READHUB_BACKEND_URL` GitHub repository secrets. The scheduled workflow runs daily and can also be started manually from GitHub Actions.
+- Before release, verify frontend/backend origins, production secrets, DB connectivity and restore plan, AI failover, scheduled ingestion, account deletion, and health checks. Review CI results and Dependabot alerts.
 
 The server exposes `/health/live` for process liveness and `/health/ready` for MongoDB readiness. API requests are rate-limited in-process; use a shared limiter store before running multiple backend instances.
 

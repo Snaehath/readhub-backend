@@ -44,6 +44,11 @@ router.post("/chat-stream", expensiveLimiter, async (req, res) => {
   res.flushHeaders();
 
   const pipeline = new AgentEventPipeline(res);
+  const requestController = new AbortController();
+  res.on("close", () => {
+    if (!res.writableEnded) requestController.abort();
+    pipeline.stopHeartbeat();
+  });
   pipeline.startHeartbeat(); // Keep Render connection alive
   const startTime = Date.now();
 
@@ -69,7 +74,7 @@ router.post("/chat-stream", expensiveLimiter, async (req, res) => {
 
     while (turns < maxTurns && !isFinished) {
       pipeline.status(turns === 0 ? "Analyzing request strategy..." : `Refining turn ${turns + 1} strategy...`);
-      const agentResponse = await agenticChat(currentPrompt, currentHistory);
+      const agentResponse = await agenticChat(currentPrompt, currentHistory, { signal: requestController.signal });
 
       if (agentResponse.thoughts && agentResponse.thoughts.length > 0) {
         agentResponse.thoughts.forEach(t => {
@@ -115,7 +120,7 @@ router.post("/chat-stream", expensiveLimiter, async (req, res) => {
 
           const scrapedResults = await Promise.all(searchResults.map(async (article) => {
             if (article.url) allSources.add(article.url);
-            const scraped = article.url ? await scrapeUrl(article.url) : "";
+            const scraped = article.url ? await scrapeUrl(article.url, requestController.signal) : "";
             const fullContent = scraped && !scraped.includes("[Content unavailable")
               ? scraped
               : [article.description, article.content].filter(Boolean).join("\n");
@@ -166,7 +171,7 @@ router.post("/chat-stream", expensiveLimiter, async (req, res) => {
     }
 
     if (!finalReply && currentPrompt !== userMessage) {
-      const synthesis = await agenticChat(currentPrompt, currentHistory, { tools: false });
+      const synthesis = await agenticChat(currentPrompt, currentHistory, { tools: false, signal: requestController.signal });
       finalReply = synthesis.text || "I could not synthesize the research results.";
     }
     if (!finalReply) finalReply = "I could not complete the research request.";
@@ -183,15 +188,41 @@ router.post("/chat-stream", expensiveLimiter, async (req, res) => {
       await user.save();
     }
 
-    pipeline.final(finalReply, thoughts, latency, sourceReferences);
+    pipeline.final(finalReply, thoughts, latency, sourceReferences, activeSessionId);
     pipeline.stopHeartbeat();
     res.end();
 
   } catch (error) {
+    if (requestController.signal.aborted) {
+      pipeline.stopHeartbeat();
+      return;
+    }
     console.error("Stream processing failed:", error.response?.status || error.code || error.name || "unknown");
     pipeline.emitEvent('error', "Intelligence blackout occurred.");
     pipeline.stopHeartbeat();
     res.end();
+  }
+});
+
+router.post("/feedback", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const [scheme, token] = authHeader?.split(" ") || [];
+  const userData = scheme === "Bearer" ? verifyToken(token) : null;
+  if (!userData) return res.status(401).json({ error: "Unauthorized" });
+  const { sessionId, message, rating } = req.body || {};
+  if (typeof sessionId !== "string" || sessionId.length > 100 || typeof message !== "string" || message.length > 12000 || !["helpful", "not_helpful"].includes(rating)) {
+    return res.status(400).json({ error: "Valid response feedback is required." });
+  }
+  try {
+    const user = await User.findById(userData.userId);
+    const session = user?.sessions.find((item) => item.sessionId === sessionId);
+    const response = session?.messages.findLast((item) => item.sender === "bot" && item.message === message);
+    if (!response) return res.status(404).json({ error: "Chat response not found." });
+    response.feedback = rating;
+    await user.save();
+    return res.status(204).end();
+  } catch (_error) {
+    return res.status(500).json({ error: "Unable to save feedback." });
   }
 });
 
