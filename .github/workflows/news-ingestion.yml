@@ -13,9 +13,14 @@ jobs:
         env:
           BACKEND_URL: ${{ secrets.READHUB_BACKEND_URL }}
           CRON_SECRET: ${{ secrets.NEWS_INGESTION_CRON_SECRET }}
-        run: curl --fail-with-body --silent --show-error --max-time 180 -X POST "$BACKEND_URL/api/news/fetch-categories/us" -H "X-Cron-Secret: $CRON_SECRET"
+        run: curl --fail-with-body --silent --show-error --output /dev/null --max-time 180 -X POST "$BACKEND_URL/api/news/fetch-categories/us" -H "X-Cron-Secret: $CRON_SECRET"
       - name: Refresh India headlines
         env:
           BACKEND_URL: ${{ secrets.READHUB_BACKEND_URL }}
           CRON_SECRET: ${{ secrets.NEWS_INGESTION_CRON_SECRET }}
-        run: curl --fail-with-body --silent --show-error --max-time 180 -X POST "$BACKEND_URL/api/news/fetch-categories/in" -H "X-Cron-Secret: $CRON_SECRET"
+        run: curl --fail-with-body --silent --show-error --output /dev/null --max-time 180 -X POST "$BACKEND_URL/api/news/fetch-categories/in" -H "X-Cron-Secret: $CRON_SECRET"
+      - name: Publish the daily AI report
+        env:
+          BACKEND_URL: ${{ secrets.READHUB_BACKEND_URL }}
+          CRON_SECRET: ${{ secrets.NEWS_INGESTION_CRON_SECRET }}
+        run: curl --fail-with-body --silent --show-error --output /dev/null --max-time 300 -X POST "$BACKEND_URL/api/ai-hub/news/daily" -H "X-Cron-Secret: $CRON_SECRET"
