@@ -1,29 +1,21 @@
-# ReadHub Backend: The Unified Intelligence Hub
+# ReadHub Backend
 
-ReadHub is an AI-powered news aggregation and research platform. The backend uses Node.js, Express, and MongoDB, with Gemini and optional provider integrations.
+The Express API for ReadHub. It stores US and India news coverage, serves the book catalog, handles account and chat APIs, and generates source-linked AI reports.
 
 ---
 
-## 🛰️ Elite Investigative Features
+## Main capabilities
 
-### 🕵️‍♂️ Streaming Investigative Engine (SSE)
+- News ingestion and keyword search across saved US and India articles.
+- AI assistant and article analysis with provider failover.
+- AI reports built from saved reporting, with inline citations and links to their sources.
+- Cookie-based authentication, chat history, books, health checks, and account lifecycle endpoints.
 
-We've migrated the core AI assistant to an **Event-Driven Streaming Architecture**.
+### On-demand AI reports
 
-- **Real-Time Hooks**: Emits `status`, `tool_call`, `tool_result`, and `llm_step` events via Server-Sent Events (SSE).
-- **Investigative Console Support**: Sends live activity events to the frontend while an investigation is running.
+Admins can generate one-off reports from saved US and India news coverage in the app. The report is an AI-written synthesis, not a replacement for publisher reporting, and includes links to source articles.
 
-### 🔎 News Research
-
-- **Keyword Retrieval**: Searches saved US and India news by title, description, content, and category.
-- **Source Auditing**: Scrapes matched articles when available and records their URLs in research responses.
-
-### 🏛️ Multi-Session Intelligence
-
-Chat history has evolved into a robust, session-indexed memory system.
-
-- **Session Isolation**: Research threads are siloed by unique `sessionId`s, preventing cross-contamination of contexts.
-- **Cloud Persistence**: All sessions and their investigative trails are synced to MongoDB for cross-device access.
+News refresh and report generation are manual for now. Admins refresh headlines and request reports on demand; no scheduler is configured in this repository. The backend retains a cron-secret-protected daily report endpoint for future automation, but nothing calls it while scheduling is disabled.
 
 ---
 
@@ -77,7 +69,7 @@ backend/
 2. **Install dependencies**:
 
    ```bash
-   npm install
+   npm ci
    ```
 
 3. **Environment Variables**:
@@ -105,8 +97,8 @@ Authentication uses a short-lived HttpOnly cookie. The frontend should call the 
 - `/health/live` checks the process and `/health/ready` checks MongoDB connectivity. Add external uptime monitoring against readiness.
 - Provider calls have request timeouts and automatic provider failover. JSON logs include provider, model, failure code, and server lifecycle events without logging prompts or API keys.
 - API throttles currently use an in-process store. Configure a shared rate-limit store before scaling to multiple backend instances.
-- News ingestion accepts an admin request or a trusted scheduler sending `X-Cron-Secret`. Set a random `NEWS_INGESTION_CRON_SECRET` (32+ bytes) on the backend and set matching `NEWS_INGESTION_CRON_SECRET` and `READHUB_BACKEND_URL` GitHub repository secrets. The scheduled workflow refreshes coverage daily, then publishes one AI-written edition if it finds at least three recent articles; it can also be started manually from GitHub Actions. Daily issues are unique per UTC date and link the source stories they synthesize.
-- Before release, verify frontend/backend origins, production secrets, DB connectivity and restore plan, AI failover, scheduled ingestion, account deletion, and health checks. Review CI results and Dependabot alerts.
+- News ingestion accepts an admin request or a trusted scheduler sending `X-Cron-Secret`. News refresh and report generation are manual in the current deployment. `NEWS_INGESTION_CRON_SECRET` is only needed if you later configure an external scheduler; the GitHub Actions workflow has been removed for now.
+- Before release, verify frontend/backend origins, production secrets, DB connectivity and restore plan, AI failover, manual news refresh and report generation, account deletion, and health checks. Configure and verify a scheduler only if you re-enable automatic ingestion or daily editions. Review CI results and Dependabot alerts.
 
 The server exposes `/health/live` for process liveness and `/health/ready` for MongoDB readiness. API requests are rate-limited in-process; use a shared limiter store before running multiple backend instances.
 
